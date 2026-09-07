@@ -127,6 +127,10 @@ class EpochOrchestrator:
         self._lock = threading.Lock()
         self._state = TurnState()
         self._active_context: Optional[EpochContext] = None
+        # ``interrupt`` advances the epoch before the replacement intent is
+        # parsed.  The next ``begin_turn`` consumes that already-reserved
+        # epoch instead of incrementing a second time.
+        self._epoch_reserved_for_next_turn = False
 
     @property
     def current_epoch(self) -> int:
@@ -150,7 +154,10 @@ class EpochOrchestrator:
             if previous is not None:
                 self._registry.cancel(previous.batch_id)
 
-            self._state.current_epoch += 1
+            if self._epoch_reserved_for_next_turn:
+                self._epoch_reserved_for_next_turn = False
+            else:
+                self._state.current_epoch += 1
             context = EpochContext(
                 epoch=self._state.current_epoch,
                 batch_id=self._registry.new_batch_id(),
@@ -174,6 +181,7 @@ class EpochOrchestrator:
         with self._lock:
             previous = self._active_context
             self._state.current_epoch += 1
+            self._epoch_reserved_for_next_turn = True
             self._active_context = None
             self._state.active_batch_id = None
             self._state.active_tool_task = None

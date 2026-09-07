@@ -74,7 +74,7 @@ def test_epochs_are_monotonic_and_interrupt_cancels_active_batch():
     orchestrator.interrupt()
     second = orchestrator.begin_turn()
 
-    assert first.epoch < second.epoch
+    assert second.epoch == first.epoch + 1
     assert registry.is_cancelled(first.batch_id) is True
     assert orchestrator.current_epoch == second.epoch
 

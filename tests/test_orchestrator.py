@@ -147,3 +147,25 @@ def test_timeout_speaks_explicit_failure_and_drops_late_tool_result():
     assert [text for text, _ in speaker.calls] == [
         "I couldn't confirm that address. Can you repeat it?"
     ]
+
+
+def test_event_sink_receives_epoch_events():
+    events = []
+    registry = BatchRegistry()
+    store = ControlledStore(registry)
+    speaker = RecordingSpeaker(registry)
+    orchestrator = EpochOrchestrator(
+        registry,
+        store,
+        speaker,
+        event_sink=events.append,
+    )
+
+    handle = orchestrator.start_address_update("Event Address")
+    assert store.started["Event Address"].wait(1)
+    store.release["Event Address"].set()
+
+    assert handle.join(1).status == "completed"
+    assert handle.wait_for_tts(1) is True
+    assert any(event["event"] == "epoch-started" for event in events)
+    assert any(event["event"] == "tts-started" for event in events)

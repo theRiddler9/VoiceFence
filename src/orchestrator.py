@@ -55,12 +55,7 @@ class OrchestratorResult:
 
 
 class UpdateHandle:
-    """Joinable handle returned by ``start_address_update``.
-
-    ``join`` waits for the order lookup/orchestration decision.  TTS is
-    started asynchronously, so callers that need to wait for it can call
-    ``wait_for_tts`` afterwards.
-    """
+    """Joinable handle for one address-update turn."""
 
     def __init__(self, context: EpochContext):
         self.context = context
@@ -127,9 +122,7 @@ class EpochOrchestrator:
         self._lock = threading.Lock()
         self._state = TurnState()
         self._active_context: Optional[EpochContext] = None
-        # ``interrupt`` advances the epoch before the replacement intent is
-        # parsed.  The next ``begin_turn`` consumes that already-reserved
-        # epoch instead of incrementing a second time.
+        # The next turn consumes the epoch advanced by an interrupt.
         self._epoch_reserved_for_next_turn = False
 
     @property
@@ -247,7 +240,7 @@ class EpochOrchestrator:
     ) -> None:
         try:
             lookup = self._store.update_address(new_address, context.batch_id)
-        except Exception as exc:  # keep the worker from killing the process
+        except Exception as exc:
             self._emit("tool-error", context, error=str(exc))
             handle._set_result(
                 OrchestratorResult(context, "error", error=str(exc))
@@ -306,8 +299,6 @@ class EpochOrchestrator:
             )
         )
 
-        # The timed-out batch is cancelled, so the failure sentence must use
-        # a fresh batch.  This also lets a user interrupt the failure speech.
         failure_context = self.begin_turn()
         failure_task = self._speaker.speak(
             self.FAILURE_MESSAGE,
@@ -338,5 +329,4 @@ class EpochOrchestrator:
         try:
             self._event_sink(payload)
         except Exception:
-            # Evidence/telemetry must never break the voice path.
             pass

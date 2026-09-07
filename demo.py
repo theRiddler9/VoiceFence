@@ -35,12 +35,10 @@ def main():
     print("[orchestrator] starting first address update")
     first = orchestrator.start_address_update("42 Wallaby Way, Sydney")
 
-    # Person interrupts partway through.
     time.sleep(1.0)
     print("[orchestrator] person interrupts -> invalidating current epoch")
     orchestrator.on_barge_in()
 
-    # Now the corrected request, under a fresh batch id.
     print("\n[orchestrator] starting corrected address update")
     second = orchestrator.on_address_intent("221B Baker Street, London")
 

@@ -40,8 +40,7 @@ class SoundDeviceSink:
     user's speakers."""
 
     def __init__(self, samplerate: int, channels: int = 1):
-        import sounddevice as sd  # imported lazily so the module still
-        # loads fine in environments with no audio device (e.g. CI)
+        import sounddevice as sd  # load lazily for headless tests
 
         self._stream = sd.RawOutputStream(
             samplerate=samplerate, channels=channels, dtype="int16"
@@ -52,8 +51,7 @@ class SoundDeviceSink:
         self._stream.write(chunk)
 
     def abort(self) -> None:
-        # abort() drops any buffered audio immediately, unlike stop(),
-        # which lets what's already queued keep playing out.
+        # Drop buffered audio immediately.
         self._stream.abort()
 
     def close(self) -> None:
@@ -81,7 +79,7 @@ class NullSink:
 def _default_sink_factory(samplerate: int) -> AudioSink:
     try:
         return SoundDeviceSink(samplerate)
-    except Exception as exc:  # no audio device, missing PortAudio, etc.
+    except Exception as exc:  # fall back to silent output
         print(f"[RimeSpeaker] No audio output available ({exc}); "
               f"falling back to a silent sink.")
         return NullSink()
@@ -138,7 +136,7 @@ class RimeSpeaker:
             return SpeakResult(batch_id, "error", 0, error="RIME_API_KEY not set")
 
         if self._registry.is_cancelled(batch_id):
-            # Cancelled before we even started — don't bother hitting the API.
+            # Avoid the network call for cancelled batches.
             return SpeakResult(batch_id, "cancelled", 0)
 
         payload = {

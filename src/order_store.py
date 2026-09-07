@@ -34,9 +34,7 @@ class OrderStore:
         poll_interval: float = 0.05,
     ):
         self._registry = registry
-        # Config value by default, but overridable per-instance — handy
-        # for tests and for Person D sweeping delay values without
-        # touching env vars.
+        # Allow tests to override the configured delay.
         self._delay_seconds = (
             delay_seconds if delay_seconds is not None else config.MOCK_LOOKUP_DELAY_SECONDS
         )
@@ -68,8 +66,7 @@ class OrderStore:
             time.sleep(step)
             elapsed += step
 
-        # One last check: a cancel could have landed in the gap between
-        # the final sleep and now.
+        # Recheck before mutating shared order state.
         if self._registry.is_cancelled(batch_id):
             return LookupResult(batch_id, "cancelled", None)
 

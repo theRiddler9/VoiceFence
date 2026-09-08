@@ -42,6 +42,16 @@ def test_make_delivery_address_is_supported():
     assert extract_address(event).address == "500 Market Street"
 
 
+def test_make_delivery_address_with_to_is_supported():
+    event = TranscriptEvent("make my delivery address to 500 Market Street", True, 13.8)
+    assert extract_address(event).address == "500 Market Street"
+
+
+def test_unrelated_make_plan_to_address_is_rejected():
+    event = TranscriptEvent("make a plan to address 123 Main St", True, 13.85)
+    assert extract_address(event) is None
+
+
 def test_polite_intervening_words_are_allowed_in_correction():
     event = TranscriptEvent(
         "change my address to 42 Wallaby Way, actually, please make it 221B Baker Street",

@@ -25,7 +25,7 @@ _ADDRESS_UPDATE = re.compile(
     re.IGNORECASE,
 )
 _MAKE_ADDRESS = re.compile(
-    r"\bmake\b.*?\baddress\s+(.+?)(?=\s*,?\s+(?:actually\b|make\s+it\b)|$)",
+    r"\bmake\s+(?:(?:my|the|a)\s+)?(?:delivery\s+)?address(?:\s+to)?\s+(.+?)(?=\s*,?\s+(?:actually\b|make\s+it\b)|$)",
     re.IGNORECASE,
 )
 _CORRECTION = re.compile(

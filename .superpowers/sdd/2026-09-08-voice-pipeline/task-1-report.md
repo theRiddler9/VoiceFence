@@ -70,3 +70,23 @@ The targeted pytest command was rerun, but the bundled launcher again failed bef
 ### Concerns
 
 Automated test execution remains blocked by the environment's Python launcher permissions; controller verification is required.
+
+## Fix Round 2
+
+### Changes
+
+- Added regression coverage for mixed repeated corrections where a later direct `make it` follows an `actually make it` correction.
+- Correction extraction now splits on every later `actually` or direct `make it` cue, so the final explicit correction wins.
+- Added narrow support for `make ... address <payload>` commands, including `make my delivery address 500 Market Street`, while retaining digit-and-letter validation.
+
+### Tests
+
+The targeted pytest command was attempted but the bundled `.venv` launcher again failed before collection because its configured Python 3.13 executable is inaccessible. `git diff --check` passed.
+
+### Commit
+
+`2298e65`
+
+### Concerns
+
+Automated tests remain unavailable in this environment; controller verification is required.

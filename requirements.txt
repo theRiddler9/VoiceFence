@@ -1,3 +1,6 @@
 requests>=2.31
 sounddevice>=0.4.6
 pytest>=7.4
+livekit-agents>=1.8.0,<2
+livekit-plugins-deepgram>=1.8.0,<2
+livekit-plugins-silero>=1.8.0,<2

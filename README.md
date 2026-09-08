@@ -125,7 +125,7 @@ cp .env.example .env   # fill in RIME_API_KEY and any STT/LLM credentials
 
 `sounddevice` (used by the Rime playback layer) needs PortAudio available on the system:
 - macOS: `brew install portaudio`
-- Linux: `apt-get install libportaudio2`
+- Linux: `sudo apt-get install libportaudio2`
 
 If no audio device is available, audio playback falls back to a silent no-op sink and logs a warning — cancellation logic still works, you just won't hear anything.
 

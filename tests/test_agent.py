@@ -52,7 +52,7 @@ def test_pipeline_handoff_keeps_only_corrected_address_and_confirmation():
     from src.agent import build_voice_pipeline
 
     registry = BatchRegistry()
-    store = OrderStore(registry, delay_seconds=0)
+    store = OrderStore(registry, delay_seconds=0.05)
     speaker = RecordingSpeaker()
     orchestrator = EpochOrchestrator(registry, store, speaker)
     pipeline = build_voice_pipeline(orchestrator)

@@ -90,3 +90,22 @@ The targeted pytest command was attempted but the bundled `.venv` launcher again
 ### Concerns
 
 Automated tests remain unavailable in this environment; controller verification is required.
+
+## Fix Round 3
+
+### Changes
+
+- Added coverage for `make my delivery address to 500 Market Street` and rejection of `make a plan to address 123 Main St`.
+- Narrowed the `make … address` grammar to explicit possessive/article and optional `delivery` forms, with optional `to`, preventing unrelated “address” false positives.
+
+### Tests
+
+The targeted pytest command remained blocked before collection by the inaccessible Python 3.13 launcher. `git diff --check` passed.
+
+### Commit
+
+`3fead7a`
+
+### Concerns
+
+Automated tests remain unavailable in this environment; controller verification is required.

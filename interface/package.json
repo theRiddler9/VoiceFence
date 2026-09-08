@@ -3,8 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev:server": "tsx server/index.ts",
-    "dev:client": "vite",
+    "dev": "tsx server/index.ts",
     "build": "tsc --noEmit && vite build",
     "test": "tsx --test server/epoch_demo.test.ts"
   },
@@ -13,5 +12,8 @@
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vite": "^6.0.5"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2"
   }
 }

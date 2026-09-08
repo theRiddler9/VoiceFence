@@ -3,96 +3,125 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#101827" />
-    <title>VoiceFence Epoch Console</title>
+    <meta name="theme-color" content="#0b1220" />
+    <title>VoiceFence — Interruptible by design</title>
   </head>
   <body>
-    <main class="shell">
-      <header class="hero">
-        <div>
-          <p class="eyebrow">VOICEFENCE / EPOCH CONSOLE</p>
-          <h1>Interruptible order control</h1>
-          <p class="subtitle">
-            Watch a delayed lookup get fenced before stale state reaches the
-            order or the speaker.
-          </p>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="VoiceFence home">
+          <span class="brand-mark">VF</span>
+          <span>VoiceFence</span>
+          <span class="brand-muted">/ control room</span>
+        </a>
+        <div class="topbar-status">
+          <span class="status-light"></span>
+          <span id="connection">Connecting</span>
         </div>
-        <div id="connection" class="pill">Connecting</div>
       </header>
 
-      <section class="metrics" aria-label="Current orchestration state">
-        <article class="metric-card">
-          <span class="label">Current epoch</span>
-          <strong id="epoch">-</strong>
-        </article>
-        <article class="metric-card">
-          <span class="label">Turn status</span>
-          <strong id="status">-</strong>
-        </article>
-        <article class="metric-card">
-          <span class="label">Rime configuration</span>
-          <strong id="rime">-</strong>
-        </article>
-      </section>
-
-      <section class="workspace">
-        <article class="panel control-panel">
-          <div class="panel-heading">
+      <main>
+        <section class="intro">
+          <div class="intro-copy">
+            <p class="eyebrow">VOICE CONCURRENCY DEMO</p>
+            <h1>Interruptible<br /><em>by design.</em></h1>
+            <p class="intro-text">
+              A voice turn can change while work is still running. VoiceFence
+              keeps the correction current and fences the old result out.
+            </p>
+          </div>
+          <div class="story-card">
+            <span class="story-number">01</span>
             <div>
-              <p class="eyebrow">CONTROL PLANE</p>
-              <h2>Start a turn</h2>
+              <strong>Run the stress case</strong>
+              <p>Start an address lookup, interrupt it, then correct the request.</p>
             </div>
-            <span id="batch" class="mono">no active batch</span>
           </div>
-          <form id="address-form">
-            <label for="address">Delivery address</label>
-            <div class="input-row">
-              <input
-                id="address"
-                name="address"
-                autocomplete="street-address"
-                value="42 Wallaby Way, Sydney"
-                required
-              />
-              <button type="submit">Start lookup</button>
-            </div>
-          </form>
-          <button id="interrupt" class="secondary" type="button">
-            Interrupt current turn
-          </button>
-          <p class="hint">
-            Try starting one lookup, interrupting it, then starting a corrected
-            address before the delay completes.
-          </p>
-        </article>
+        </section>
 
-        <article class="panel order-panel">
-          <div class="panel-heading">
+        <section class="dashboard-grid">
+          <article class="panel turn-panel">
+            <div class="panel-topline">
+              <div>
+                <p class="eyebrow">LIVE TURN</p>
+                <h2>Conversation state</h2>
+              </div>
+              <span id="rime" class="badge badge-neutral">Rime checking</span>
+            </div>
+
+            <div class="turn-visual">
+              <div id="voice-orb" class="voice-orb" aria-label="Voice state">
+                <div class="orb-core"></div>
+                <span id="phase">Idle</span>
+              </div>
+              <div class="turn-summary">
+                <span id="turn-label" class="turn-label">Ready for a request</span>
+                <p id="turn-caption">The corrected turn will be the only one that reaches the order.</p>
+                <div class="turn-meta">
+                  <span>Epoch <strong id="epoch">0</strong></span>
+                  <span id="batch" class="mono">no active batch</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="conversation" aria-live="polite">
+              <div class="message message-user">
+                <span class="message-label">USER REQUEST</span>
+                <p id="request-preview">Change my delivery address…</p>
+              </div>
+              <div class="message message-system">
+                <span class="message-label">SYSTEM GUARANTEE</span>
+                <p>Only current-epoch work may update the order or speak.</p>
+              </div>
+            </div>
+
+            <form id="address-form" class="control-form">
+              <label for="address">Try an address change</label>
+              <div class="input-wrap">
+                <input id="address" name="address" autocomplete="street-address" value="42 Wallaby Way, Sydney" required />
+                <button type="submit">Start lookup <span>↗</span></button>
+              </div>
+            </form>
+            <button id="interrupt" class="interrupt-button" type="button">Interrupt current turn</button>
+          </article>
+
+          <aside class="side-column">
+            <article class="panel order-panel">
+              <div class="panel-topline compact">
+                <div>
+                  <p class="eyebrow">APPLICATION STATE</p>
+                  <h2>Current order</h2>
+                </div>
+                <span id="status" class="status-text">Idle</span>
+              </div>
+              <div class="order-address">
+                <span class="field-label">DELIVERY ADDRESS</span>
+                <strong id="order-address">123 Placeholder St, Springfield</strong>
+              </div>
+              <div class="order-facts">
+                <div><span>ETA</span><strong id="order-eta">30 minutes</strong></div>
+                <div><span>State</span><strong id="order-status">confirmed</strong></div>
+              </div>
+            </article>
+
+          
+          </aside>
+        </section>
+
+        <section class="panel events-panel">
+          <div class="panel-topline compact">
             <div>
-              <p class="eyebrow">ORDER STATE</p>
-              <h2>Current order</h2>
+              <p class="eyebrow">EVENT LOGGER</p>
             </div>
-            <span id="phase" class="status-dot">Idle</span>
           </div>
-          <dl class="order-details">
-            <div><dt>Address</dt><dd id="order-address">-</dd></div>
-            <div><dt>ETA</dt><dd id="order-eta">-</dd></div>
-            <div><dt>State</dt><dd id="order-status">-</dd></div>
-          </dl>
-        </article>
-      </section>
+          <ol id="events" class="events" aria-live="polite"></ol>
+        </section>
+      </main>
 
-      <section class="panel events-panel">
-        <div class="panel-heading">
-          <div>
-            <p class="eyebrow">EVIDENCE FEED</p>
-            <h2>Epoch events</h2>
-          </div>
-          <span class="hint">Interface events only; measured evidence belongs in RIME_EVIDENCE.md.</span>
-        </div>
-        <ol id="events" class="events" aria-live="polite"></ol>
-      </section>
-    </main>
+      <footer class="footer">
+        <span>VoiceFence</span>
+      </footer>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

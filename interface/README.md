@@ -20,17 +20,16 @@ npm test
 npm run build
 ```
 
-Use two terminals for the live interface:
+Run the complete interface:
 
 ```powershell
-npm run dev:server
+npm run dev
 ```
 
-```powershell
-npm run dev:client
-```
+Open <http://localhost:3000>. The TypeScript server hosts the Vite frontend
+and the `/api` routes at the same origin, so there is one process and one
+browser link. CORS headers remain enabled for direct API access.
 
-Open <http://localhost:5173>.
-
-The API uses `MOCK_LOOKUP_DELAY_SECONDS` and detects `RIME_API_KEY` from the
-process environment. The interface does not load `.env` automatically.
+The API automatically loads the ignored root `.env` file. It uses
+`MOCK_LOOKUP_DELAY_SECONDS` for the demo delay and only exposes a boolean Rime
+configuration status to the browser; the API key never leaves the server.

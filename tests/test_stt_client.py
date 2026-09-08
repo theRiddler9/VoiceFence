@@ -28,6 +28,20 @@ def test_latest_of_multiple_explicit_corrections_wins():
     assert extract_address(event).address == "3 Third St"
 
 
+def test_latest_direct_correction_wins_without_actually():
+    event = TranscriptEvent(
+        "change my address to 1 First St, actually make it 2 Second St, make it 3 Third St",
+        True,
+        13.6,
+    )
+    assert extract_address(event).address == "3 Third St"
+
+
+def test_make_delivery_address_is_supported():
+    event = TranscriptEvent("make my delivery address 500 Market Street", True, 13.7)
+    assert extract_address(event).address == "500 Market Street"
+
+
 def test_polite_intervening_words_are_allowed_in_correction():
     event = TranscriptEvent(
         "change my address to 42 Wallaby Way, actually, please make it 221B Baker Street",

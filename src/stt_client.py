@@ -24,8 +24,12 @@ _ADDRESS_UPDATE = re.compile(
     r"(?:change|update|set)\b.*?\baddress\s+to\s+(.+?)(?=\s+actually\b|$)",
     re.IGNORECASE,
 )
+_MAKE_ADDRESS = re.compile(
+    r"\bmake\b.*?\baddress\s+(.+?)(?=\s*,?\s+(?:actually\b|make\s+it\b)|$)",
+    re.IGNORECASE,
+)
 _CORRECTION = re.compile(
-    r"(?:actually\b(?:(?!\bmake\s+it\b).)*?)?\bmake\s+it\s+(.+?)(?=\s*,?\s+actually\b|$)",
+    r"(?:actually\b(?:(?!\bmake\s+it\b).)*?)?\bmake\s+it\s+(.+?)(?=\s*,?\s+(?:actually\b|make\s+it\b)|$)",
     re.IGNORECASE,
 )
 
@@ -45,7 +49,11 @@ def extract_address(event: TranscriptEvent) -> AddressIntent | None:
     if not text:
         return None
 
-    matches = [*(_ADDRESS_UPDATE.finditer(text)), *(_CORRECTION.finditer(text))]
+    matches = [
+        *(_ADDRESS_UPDATE.finditer(text)),
+        *(_MAKE_ADDRESS.finditer(text)),
+        *(_CORRECTION.finditer(text)),
+    ]
     matches.sort(key=lambda match: match.start())
     for match in reversed(matches):
         address = _clean_payload(match.group(1))

@@ -6,3 +6,4 @@ __pycache__/
 *.pcm
 *.wav
 *.mp3
+.worktrees/

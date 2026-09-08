@@ -105,6 +105,19 @@ def test_no_barge_in_is_emitted_when_assistant_is_not_speaking():
     assert events == []
 
 
+def test_duplicate_speech_start_after_assistant_starts_does_not_barge_in():
+    calls = []
+    events = []
+    pipeline = VoicePipeline(lambda: calls.append("barge-in"), lambda address: None, events.append)
+
+    pipeline.on_user_speech_started(timestamp=20.0)
+    pipeline.set_assistant_speaking(True)
+    pipeline.on_user_speech_started(timestamp=20.1)
+
+    assert calls == []
+    assert events == []
+
+
 def test_interim_correction_is_not_duplicated_by_final_transcript():
     addresses = []
     pipeline = VoicePipeline(lambda: None, addresses.append)

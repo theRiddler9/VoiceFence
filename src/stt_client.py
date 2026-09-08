@@ -93,8 +93,9 @@ class VoicePipeline:
         detected_at = time.monotonic() if timestamp is None else timestamp
         should_barge_in = False
         with self._lock:
+            is_new_segment = not self._user_speaking
             self._user_speaking = True
-            if self._assistant_speaking and not self._barge_in_emitted:
+            if is_new_segment and self._assistant_speaking and not self._barge_in_emitted:
                 self._barge_in_emitted = True
                 should_barge_in = True
 

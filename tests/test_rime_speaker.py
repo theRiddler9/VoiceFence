@@ -3,9 +3,7 @@ from src.rime_speaker import RimeSpeaker
 
 
 class FakeResponse:
-    """Stands in for requests.Response, streaming pre-baked chunks. Lets a
-    test hook a callback in between chunks (e.g. to fire a cancel) without
-    touching the real network."""
+    """Small streaming response fake for cancellation tests."""
 
     def __init__(self, chunks, on_each_chunk=None):
         self._chunks = chunks
@@ -104,8 +102,6 @@ def test_cancel_mid_stream_stops_playback_and_drops_buffered_audio():
     reg = BatchRegistry()
     chunks = [b"aaaa", b"bbbb", b"cccc", b"dddd"]
 
-    # Cancel right after the second chunk is pulled from Rime, mimicking
-    # a "stop, that's outdated now" arriving mid-flight.
     call_count = {"n": 0}
 
     def on_each_chunk():
@@ -118,9 +114,6 @@ def test_cancel_mid_stream_stops_playback_and_drops_buffered_audio():
     result = speaker.speak("hello", "batch-1")
 
     assert result.status == "cancelled"
-    # Only the first chunk should have actually reached playback — the
-    # second chunk was pulled, but the cancel check before *writing* it
-    # should have caught it and aborted instead.
     assert sink.written == [b"aaaa"]
     assert sink.aborted is True
     assert sink.closed is True

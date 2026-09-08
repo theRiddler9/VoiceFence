@@ -25,8 +25,7 @@ class BatchRegistry:
 
     @classmethod
     def new_batch_id(cls) -> str:
-        """Convenience helper for callers (e.g. the orchestrator/demo) that
-        want a fresh, unique batch id rather than inventing their own."""
+        """Return a fresh process-wide batch identifier."""
         return f"batch-{next(cls._counter)}"
 
     def cancel(self, batch_id: str) -> None:
@@ -40,8 +39,6 @@ class BatchRegistry:
             return batch_id in self._cancelled
 
     def clear(self, batch_id: str) -> None:
-        """Optional housekeeping once a batch is fully resolved (spoken,
-        looked up, or cancelled and cleaned up), so the set doesn't grow
-        forever across a long-running demo."""
+        """Remove a cancelled batch after all work has stopped."""
         with self._lock:
             self._cancelled.discard(batch_id)

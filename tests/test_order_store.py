@@ -27,7 +27,6 @@ def test_cancelled_before_start_never_runs():
 
     assert result.status == "cancelled"
     assert result.order is None
-    # Should return almost immediately, not wait out the delay.
     assert elapsed < 0.1
     assert store.get_order()["address"] != "1 New Address"
 
@@ -44,14 +43,13 @@ def test_cancel_mid_delay_is_ignored_and_leaves_order_untouched():
     t = threading.Thread(target=run)
     start = time.monotonic()
     t.start()
-    time.sleep(0.15)  # let it get partway through the delay
+    time.sleep(0.15)
     reg.cancel("batch-1")
     t.join()
     elapsed = time.monotonic() - start
 
     assert result_holder["result"].status == "cancelled"
     assert result_holder["result"].order is None
-    # Should stop well short of the full 1.0s delay.
     assert elapsed < 0.5
     original_address = store.get_order()["address"]
     assert original_address != "Stale Address"

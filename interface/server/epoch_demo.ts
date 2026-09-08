@@ -75,6 +75,7 @@ export class InterfaceDemoSession {
     this.active = operation;
     this.status = "lookup-pending";
     this.emit("epoch-started", operation);
+    this.emit("tool-started", operation, { purpose: "address-lookup" });
 
     setTimeout(() => this.finishLookup(operation), this.lookupDelayMs);
     return this.getState();
@@ -87,11 +88,10 @@ export class InterfaceDemoSession {
     this.active = null;
     this.status = "interrupted";
 
-    if (previous) this.emit("epoch-invalidated", previous, { reason });
-    this.emit("epoch-advanced", {
-      epoch: this.epoch,
-      batchId: previous?.batchId ?? "",
-    }, { reason });
+    if (previous) {
+      this.emit("barge-in", previous, { reason });
+      this.emit("epoch-invalidated", previous, { reason });
+    }
     return this.getState();
   }
 

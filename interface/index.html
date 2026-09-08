@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0b1220" />
-    <title>VoiceFence — Interruptible by design</title>
+    <meta name="theme-color" content="#11150f" />
+    <title>VoiceFence — Epoch control room</title>
   </head>
   <body>
     <div class="app-shell">
@@ -12,74 +12,79 @@
         <a class="brand" href="/" aria-label="VoiceFence home">
           <span class="brand-mark">VF</span>
           <span>VoiceFence</span>
-          <span class="brand-muted">/ control room</span>
+          <span class="brand-muted">epoch control room</span>
         </a>
-        <div class="topbar-status">
-          <span class="status-light"></span>
-          <span id="connection">Connecting</span>
-        </div>
+        <span id="connection" class="connection-status">API connecting</span>
       </header>
 
       <main>
-        <section class="intro">
-          <div class="intro-copy">
+        <section class="page-heading">
+          <div>
             <p class="eyebrow">VOICE CONCURRENCY DEMO</p>
-            <h1>Interruptible<br /><em>by design.</em></h1>
-            <p class="intro-text">
-              A voice turn can change while work is still running. VoiceFence
-              keeps the correction current and fences the old result out.
-            </p>
+            <h1>Only the current turn can act.</h1>
+            <p>Interrupt a delayed address lookup and watch the old batch be fenced out of the order.</p>
           </div>
-          <div class="story-card">
-            <span class="story-number">01</span>
-            <div>
-              <strong>Run the stress case</strong>
-              <p>Start an address lookup, interrupt it, then correct the request.</p>
-            </div>
+          <div class="run-hint">
+            <strong>Stress case</strong>
+            <span>Start a lookup, interrupt it, then submit the corrected address.</span>
           </div>
         </section>
 
+        <section class="connection-grid" aria-label="Voice connection status">
+          <article class="status-card">
+            <span>Microphone</span>
+            <strong id="microphone">Demo input</strong>
+            <small>Browser microphone is not connected in this demo.</small>
+          </article>
+          <article class="status-card">
+            <span>LiveKit</span>
+            <strong id="livekit">Not connected</strong>
+            <small>LiveKit wiring is pending.</small>
+          </article>
+          <article class="status-card">
+            <span>Rime</span>
+            <strong id="rime">Checking configuration</strong>
+            <small>Server-side key status only.</small>
+          </article>
+          <article class="status-card execution-card">
+            <span>Current execution</span>
+            <strong>Epoch <b id="epoch">0</b></strong>
+            <small id="batch">No active batch</small>
+          </article>
+        </section>
+
         <section class="dashboard-grid">
-          <article class="panel turn-panel">
-            <div class="panel-topline">
+          <article class="panel conversation-panel">
+            <div class="panel-heading">
               <div>
-                <p class="eyebrow">LIVE TURN</p>
-                <h2>Conversation state</h2>
+                <p class="eyebrow">LIVE CONVERSATION</p>
+                <h2>Current turn</h2>
               </div>
-              <span id="rime" class="badge badge-neutral">Rime checking</span>
+              <span id="audio-state" class="audio-state" data-state="idle">Idle</span>
             </div>
 
-            <div class="turn-visual">
-              <div id="voice-orb" class="voice-orb" aria-label="Voice state">
-                <div class="orb-core"></div>
-                <span id="phase">Idle</span>
-              </div>
-              <div class="turn-summary">
-                <span id="turn-label" class="turn-label">Ready for a request</span>
-                <p id="turn-caption">The corrected turn will be the only one that reaches the order.</p>
-                <div class="turn-meta">
-                  <span>Epoch <strong id="epoch">0</strong></span>
-                  <span id="batch" class="mono">no active batch</span>
-                </div>
-              </div>
+            <div class="audio-indicator" id="voice-orb" data-state="idle" aria-label="Audio state">
+              <span class="orb-core"></span>
+              <span id="phase">Idle</span>
             </div>
 
             <div class="conversation" aria-live="polite">
               <div class="message message-user">
-                <span class="message-label">USER REQUEST</span>
-                <p id="request-preview">Change my delivery address…</p>
+                <span class="message-label">User</span>
+                <p id="request-preview">Change my delivery address to 42 Wallaby Way, Sydney.</p>
               </div>
-              <div class="message message-system">
-                <span class="message-label">SYSTEM GUARANTEE</span>
-                <p>Only current-epoch work may update the order or speak.</p>
+              <div class="message message-assistant">
+                <span class="message-label">Assistant</span>
+                <p id="assistant-response">Ready to check your address.</p>
               </div>
+              <div id="interruption-note" class="interruption-note" hidden></div>
             </div>
 
             <form id="address-form" class="control-form">
-              <label for="address">Try an address change</label>
+              <label for="address">Delivery address</label>
               <div class="input-wrap">
                 <input id="address" name="address" autocomplete="street-address" value="42 Wallaby Way, Sydney" required />
-                <button type="submit">Start lookup <span>↗</span></button>
+                <button type="submit">Start lookup</button>
               </div>
             </form>
             <button id="interrupt" class="interrupt-button" type="button">Interrupt current turn</button>
@@ -87,40 +92,37 @@
 
           <aside class="side-column">
             <article class="panel order-panel">
-              <div class="panel-topline compact">
+              <div class="panel-heading">
                 <div>
-                  <p class="eyebrow">APPLICATION STATE</p>
+                  <p class="eyebrow">ORDER STATE</p>
                   <h2>Current order</h2>
                 </div>
                 <span id="status" class="status-text">Idle</span>
               </div>
               <div class="order-address">
-                <span class="field-label">DELIVERY ADDRESS</span>
+                <span class="field-label">Current address</span>
                 <strong id="order-address">123 Placeholder St, Springfield</strong>
               </div>
               <div class="order-facts">
                 <div><span>ETA</span><strong id="order-eta">30 minutes</strong></div>
-                <div><span>State</span><strong id="order-status">confirmed</strong></div>
+                <div><span>Order status</span><strong id="order-status">confirmed</strong></div>
               </div>
+              <p class="order-proof">A stale batch may finish late, but it cannot overwrite this order.</p>
             </article>
-
-          
           </aside>
         </section>
 
         <section class="panel events-panel">
-          <div class="panel-topline compact">
+          <div class="panel-heading">
             <div>
-              <p class="eyebrow">EVENT LOGGER</p>
+              <p class="eyebrow">EPOCH EVENT TIMELINE</p>
+              <h2>Proof that stale work was fenced</h2>
             </div>
+            <span class="timeline-note">Newest first</span>
           </div>
           <ol id="events" class="events" aria-live="polite"></ol>
         </section>
       </main>
-
-      <footer class="footer">
-        <span>VoiceFence</span>
-      </footer>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

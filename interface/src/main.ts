@@ -32,14 +32,14 @@ const status = $("status");
 const rime = $("rime");
 const batch = $("batch");
 const phase = $("phase");
+const audioState = $("audio-state");
 const voiceOrb = $("voice-orb");
-const turnLabel = $("turn-label");
-const turnCaption = $("turn-caption");
+const assistantResponse = $("assistant-response");
+const interruptionNote = $("interruption-note");
 const requestPreview = $("request-preview");
 const orderAddress = $("order-address");
 const orderEta = $("order-eta");
 const orderStatus = $("order-status");
-const staleCount = $("stale-count");
 const events = $("events");
 const addressInput = $("address") as HTMLInputElement;
 const addressForm = $("address-form") as HTMLFormElement;
@@ -58,23 +58,21 @@ function displayStatus(value: string): string {
   return value.replaceAll("-", " ");
 }
 
-function describeTurn(state: InterfaceState): [string, string] {
-  if (state.status === "lookup-pending") {
-    return ["Checking the address", "The backend is working under the current epoch."];
-  }
-  if (state.status === "speaking") {
-    return ["Rime is speaking", "Interrupt now to prove the current turn stays in control."];
-  }
-  if (state.status === "interrupted") {
-    return ["Turn interrupted", "The previous batch is fenced. Start the corrected request."];
-  }
-  if (state.status === "stale-dropped") {
-    return ["Stale work dropped", "The old result completed late, but never reached the order."];
-  }
-  if (state.status === "completed") {
-    return ["Turn completed", "Only the current address was confirmed."];
-  }
-  return ["Ready for a request", "The corrected turn will be the only one that reaches the order."];
+function getAudioState(state: InterfaceState): string {
+  if (state.status === "interrupted") return "Interrupted";
+  if (state.status === "completed") return "Completed";
+  if (state.phase === "lookup") return "Processing";
+  if (state.phase === "speaking") return "Speaking";
+  return "Listening";
+}
+
+function getAssistantResponse(state: InterfaceState): string {
+  if (state.status === "lookup-pending") return "I’m checking that address...";
+  if (state.status === "speaking") return "The current address was confirmed. Rime is speaking the result.";
+  if (state.status === "interrupted") return "I stopped the previous request.";
+  if (state.status === "stale-dropped") return "The old result arrived late and was dropped.";
+  if (state.status === "completed") return "The current address was confirmed.";
+  return "Ready to check your address.";
 }
 
 function addEventRow(item: EventRecord): HTMLLIElement {
@@ -82,53 +80,51 @@ function addEventRow(item: EventRecord): HTMLLIElement {
   const time = document.createElement("time");
   const name = document.createElement("strong");
   const detail = document.createElement("span");
-  const details = [item.reason, item.source, item.purpose].filter(Boolean).join(" / ");
+  const extras = [item.reason, item.source, item.purpose].filter(Boolean).join(" / ");
 
   time.textContent = new Date(item.timestamp).toLocaleTimeString();
   name.textContent = item.event;
-  detail.textContent = `epoch ${item.epoch} · ${item.batchId}${details ? ` · ${details}` : ""}`;
+  detail.textContent = `${item.batchId || "no batch"} · epoch ${item.epoch}${extras ? ` · ${extras}` : ""}`;
   row.append(time, name, detail);
   return row;
 }
 
 function render(state: InterfaceState): void {
-  const [label, caption] = describeTurn(state);
+  const currentAudioState = getAudioState(state);
+  const recentInterruption = [...state.events].reverse().find((item) => item.event === "barge-in");
 
-  connection.textContent = "Connected";
-  connection.parentElement?.classList.add("is-connected");
+  connection.textContent = "API connected";
   epoch.textContent = String(state.currentEpoch);
+  batch.textContent = state.activeBatchId ?? "No active batch";
+  rime.textContent = state.rimeConfigured ? "Configured" : "Key missing";
+  rime.classList.toggle("is-ready", state.rimeConfigured);
   status.textContent = displayStatus(state.status);
   status.dataset.state = state.status;
-  rime.textContent = state.rimeConfigured ? "Rime key detected" : "Rime key missing";
-  rime.className = state.rimeConfigured ? "badge badge-ready" : "badge badge-warning";
-  batch.textContent = state.activeBatchId ?? "no active batch";
-  phase.textContent = displayStatus(state.phase);
+  phase.textContent = currentAudioState;
+  audioState.textContent = currentAudioState;
+  audioState.dataset.state = state.status;
   voiceOrb.dataset.state = state.phase;
-  turnLabel.textContent = label;
-  turnCaption.textContent = caption;
+  assistantResponse.textContent = getAssistantResponse(state);
+  interruptionNote.hidden = state.status !== "interrupted" && state.status !== "stale-dropped";
+  interruptionNote.textContent = recentInterruption
+    ? `User interrupted · Epoch ${recentInterruption.epoch} cancelled`
+    : "";
   orderAddress.textContent = state.order.address;
   orderEta.textContent = `${state.order.etaMinutes} minutes`;
   orderStatus.textContent = state.order.status;
-  staleCount.textContent = String(state.events.filter((item) => item.event === "stale-dropped").length);
   interruptButton.disabled = !state.activeBatchId;
   requestPreview.textContent = addressInput.value
     ? `Change my delivery address to ${addressInput.value}.`
-    : "Change my delivery address…";
+    : "Enter an address to update the delivery order.";
 
-  events.replaceChildren(
-    ...state.events
-      .slice(-6)
-      .reverse()
-      .map(addEventRow),
-  );
+  events.replaceChildren(...state.events.slice(-10).reverse().map(addEventRow));
 }
 
 async function refresh(): Promise<void> {
   try {
     render(await request<InterfaceState>("/api/state"));
   } catch (error) {
-    connection.textContent = "Backend offline";
-    connection.parentElement?.classList.remove("is-connected");
+    connection.textContent = "API offline";
     console.error(error);
   }
 }
@@ -149,7 +145,7 @@ interruptButton.addEventListener("click", async () => {
 addressInput.addEventListener("input", () => {
   requestPreview.textContent = addressInput.value
     ? `Change my delivery address to ${addressInput.value}.`
-    : "Change my delivery address…";
+    : "Enter an address to update the delivery order.";
 });
 
 void refresh();

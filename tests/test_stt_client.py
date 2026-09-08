@@ -1,4 +1,4 @@
-from src.stt_client import TranscriptEvent, extract_address
+from src.stt_client import TranscriptEvent, VoicePipeline, extract_address
 
 
 def test_extracts_address_from_interim_transcript():
@@ -70,3 +70,58 @@ def test_address_intent_preserves_raw_transcript():
 def test_unrelated_address_word_is_rejected():
     event = TranscriptEvent("I need to address that problem tomorrow", True, 14.0)
     assert extract_address(event) is None
+
+
+def test_overlap_emits_one_immediate_barge_in_per_segment():
+    calls = []
+    events = []
+    pipeline = VoicePipeline(
+        lambda: calls.append("barge-in"),
+        lambda address: None,
+        events.append,
+    )
+
+    pipeline.set_assistant_speaking(True)
+    pipeline.on_user_speech_started(timestamp=20.0)
+    pipeline.on_user_speech_started(timestamp=20.1)
+
+    assert calls == ["barge-in"]
+    assert events[-1] == {"event": "barge-in-detected", "timestamp": 20.0}
+
+    pipeline.on_user_speech_ended()
+    pipeline.on_user_speech_started(timestamp=21.0)
+
+    assert calls == ["barge-in", "barge-in"]
+
+
+def test_no_barge_in_is_emitted_when_assistant_is_not_speaking():
+    calls = []
+    events = []
+    pipeline = VoicePipeline(lambda: calls.append("barge-in"), lambda address: None, events.append)
+
+    pipeline.on_user_speech_started(timestamp=20.0)
+
+    assert calls == []
+    assert events == []
+
+
+def test_interim_correction_is_not_duplicated_by_final_transcript():
+    addresses = []
+    pipeline = VoicePipeline(lambda: None, addresses.append)
+
+    pipeline.on_user_speech_started()
+    pipeline.on_transcript(TranscriptEvent("make it 221B Baker Street", False, 1.0))
+    pipeline.on_transcript(TranscriptEvent("make it 221B Baker Street", True, 1.2))
+
+    assert addresses == ["221B Baker Street"]
+
+
+def test_later_different_correction_in_same_segment_is_emitted():
+    addresses = []
+    pipeline = VoicePipeline(lambda: None, addresses.append)
+
+    pipeline.on_user_speech_started()
+    pipeline.on_transcript(TranscriptEvent("make it 221B Baker Street", False, 1.0))
+    pipeline.on_transcript(TranscriptEvent("make it 10 Downing Street", False, 1.1))
+
+    assert addresses == ["221B Baker Street", "10 Downing Street"]

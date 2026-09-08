@@ -1,0 +1,51 @@
+# Task 1 Report
+
+## Status
+
+DONE_WITH_CONCERNS
+
+## Files changed
+
+- `src/stt_client.py`
+- `tests/test_stt_client.py`
+
+## RED evidence
+
+The required command was run before implementation:
+
+```text
+.\.venv\Scripts\python.exe -E -m pytest tests/test_stt_client.py -v
+```
+
+The worktree launcher failed before pytest collection because it targets an inaccessible interpreter:
+
+```text
+did not find executable at 'C:\Users\riyaj\AppData\Local\Programs\Python\Python313\python.exe': Access is denied.
+```
+
+Therefore the expected missing-module collection failure could not be observed.
+
+## GREEN evidence
+
+The required post-implementation command was rerun, but the same Python launcher error occurred before pytest could execute:
+
+```text
+did not find executable at 'C:\Users\riyaj\AppData\Local\Programs\Python\Python313\python.exe': Access is denied.
+```
+
+`git diff --check` completed without whitespace errors. Source and test files were reviewed manually.
+
+## Commit SHA
+
+`5364dc7`
+
+## Self-review findings
+
+- Transcript and address models are immutable frozen dataclasses.
+- Transcript timestamps default to `time.monotonic()` and explicit timestamps are preserved.
+- Extraction normalizes whitespace, handles case-insensitive address-update and correction cues, selects the latest explicit correction, strips trailing sentence punctuation, and requires at least one digit and one letter.
+- Unrelated uses of “address” do not match an extraction cue.
+
+## Concerns
+
+- The bundled `.venv` Python launcher cannot access its configured Python 3.13 executable, so pytest could not run in this environment. A functioning interpreter should run `tests/test_stt_client.py` and the complete suite before integration.

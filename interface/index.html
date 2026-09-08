@@ -6,121 +6,120 @@
     <meta name="theme-color" content="#11150f" />
     <title>VoiceFence — Epoch control room</title>
   </head>
-  <body>
-    <div class="app-shell">
-      <header class="topbar">
-        <a class="brand" href="/" aria-label="VoiceFence home">
-          <span class="brand-mark">VF</span>
+  <body class="min-w-80 bg-[#11150f] font-sans text-[#f5f7ef] antialiased">
+    <div class="min-h-screen bg-[radial-gradient(circle_at_88%_4%,rgba(151,213,54,0.13),transparent_30rem)] px-4 py-5 sm:px-7 lg:px-[4vw] lg:py-6">
+      <header class="flex items-center justify-between border-b border-lime-100/20 pb-5">
+        <a class="flex items-center gap-2.5 text-[0.98rem] font-extrabold tracking-tight text-[#f9faf3]" href="/" aria-label="VoiceFence home">
+          <span class="grid size-7 place-items-center rounded-lg bg-lime-300 text-[0.7rem] font-black tracking-tighter text-lime-950 shadow-[0_0_22px_rgba(202,255,77,0.22)]">VF</span>
           <span>VoiceFence</span>
-          <span class="brand-muted">epoch control room</span>
         </a>
-        <span id="connection" class="connection-status">API connecting</span>
+        <span id="connection" class="text-xs text-lime-200">API connecting</span>
       </header>
 
       <main>
-        <section class="page-heading">
+        <section class="grid gap-8 py-14 lg:grid-cols-[minmax(0,1fr)_minmax(290px,0.37fr)] lg:gap-[8vw] lg:py-[7vw]">
           <div>
-            <p class="eyebrow">VOICE CONCURRENCY DEMO</p>
-            <h1>Only the current turn can act.</h1>
-            <p>Interrupt a delayed address lookup and watch the old batch be fenced out of the order.</p>
+            <p class="mb-2 text-[0.65rem] font-extrabold tracking-[0.17em] text-lime-300 uppercase">Voice concurrency demo</p>
+            <h1 class="max-w-4xl text-5xl leading-[0.9] font-semibold tracking-[-0.075em] text-[#f9faf4] sm:text-7xl lg:text-[clamp(4rem,6vw,6.8rem)]">Only the current turn can act.</h1>
+            <p class="mt-5 max-w-2xl text-base leading-relaxed text-[#b3bdb0]">Interrupt a delayed address lookup and watch the old batch be fenced out of the order.</p>
           </div>
-          <div class="run-hint">
-            <strong>Stress case</strong>
-            <span>Start a lookup, interrupt it, then submit the corrected address.</span>
+          <div class="self-end border-l-2 border-lime-300 py-1 pl-4 text-sm leading-relaxed text-[#afb9a8]">
+            <strong class="mb-1 block text-[#f4f7eb]">Stress case</strong>
+            Start a lookup, interrupt it, then submit the corrected address.
           </div>
         </section>
 
-        <section class="connection-grid" aria-label="Voice connection status">
-          <article class="status-card">
-            <span>Microphone</span>
-            <strong id="microphone">Demo input</strong>
-            <small>Browser microphone is not connected in this demo.</small>
+        <section class="mb-[18px] grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4" aria-label="Voice connection status">
+          <article class="rounded-2xl border border-lime-100/20 bg-[#1c2319]/90 p-5 shadow-2xl shadow-black/20">
+            <span class="block text-xs text-[#9da997]">Microphone</span>
+            <strong id="microphone" class="my-2.5 block text-base text-[#eef4e5]">Demo input</strong>
+            <small class="block text-xs leading-snug text-[#9da997]">Browser microphone is not connected in this demo.</small>
           </article>
-          <article class="status-card">
-            <span>LiveKit</span>
-            <strong id="livekit">Not connected</strong>
-            <small>LiveKit wiring is pending.</small>
+          <article class="rounded-2xl border border-lime-100/20 bg-[#1c2319]/90 p-5 shadow-2xl shadow-black/20">
+            <span class="block text-xs text-[#9da997]">LiveKit</span>
+            <strong id="livekit" class="my-2.5 block text-base text-[#eef4e5]">Not connected</strong>
+            <small class="block text-xs leading-snug text-[#9da997]">LiveKit wiring is pending.</small>
           </article>
-          <article class="status-card">
-            <span>Rime</span>
-            <strong id="rime">Checking configuration</strong>
-            <small>Server-side key status only.</small>
+          <article class="rounded-2xl border border-lime-100/20 bg-[#1c2319]/90 p-5 shadow-2xl shadow-black/20">
+            <span class="block text-xs text-[#9da997]">Rime</span>
+            <strong id="rime" class="my-2.5 block text-base text-[#eef4e5]">Checking configuration</strong>
+            <small class="block text-xs leading-snug text-[#9da997]">Server-side key status only.</small>
           </article>
-          <article class="status-card execution-card">
-            <span>Current execution</span>
-            <strong>Epoch <b id="epoch">0</b></strong>
-            <small id="batch">No active batch</small>
+          <article class="rounded-2xl border border-lime-300/35 bg-gradient-to-br from-[#1d3919] to-[#223d19] p-5 shadow-2xl shadow-black/20">
+            <span class="block text-xs text-[#9da997]">Current execution</span>
+            <strong class="my-2.5 block text-base text-[#eef4e5]">Epoch <b id="epoch" class="text-xl text-lime-300">0</b></strong>
+            <small id="batch" class="block text-xs leading-snug text-[#9da997]">No active batch</small>
           </article>
         </section>
 
-        <section class="dashboard-grid">
-          <article class="panel conversation-panel">
-            <div class="panel-heading">
+        <section class="grid gap-[18px] lg:grid-cols-[minmax(0,1.62fr)_minmax(330px,0.85fr)]">
+          <article class="min-h-[500px] rounded-2xl border border-lime-100/20 bg-[#1c2319]/90 p-5 shadow-2xl shadow-black/20 sm:p-7">
+            <div class="flex items-center justify-between gap-4">
               <div>
-                <p class="eyebrow">LIVE CONVERSATION</p>
-                <h2>Current turn</h2>
+                <p class="mb-2 text-[0.65rem] font-extrabold tracking-[0.17em] text-lime-300 uppercase">Live conversation</p>
+                <h2 class="text-lg font-bold tracking-tight text-[#f8f9f2]">Current turn</h2>
               </div>
-              <span id="audio-state" class="audio-state" data-state="idle">Idle</span>
+              <span id="audio-state" class="rounded-full border border-lime-300/40 bg-lime-300/10 px-2.5 py-1.5 text-xs text-lime-200" data-state="idle">Idle</span>
             </div>
 
-            <div class="audio-indicator" id="voice-orb" data-state="idle" aria-label="Audio state">
-              <span class="orb-core"></span>
-              <span id="phase">Idle</span>
+            <div id="voice-orb" class="mx-auto my-[34px] grid size-[122px] place-items-center rounded-full border border-lime-300/35 bg-[radial-gradient(circle,#36571d_0%,#1d3019_48%,#172017_72%)] text-xs text-[#c9d5bd] uppercase shadow-[0_0_28px_rgba(202,255,77,0.18)]" data-state="idle" aria-label="Audio state">
+              <span class="size-[22px] rounded-full bg-lime-300 shadow-[0_0_28px_rgba(202,255,77,0.65)]"></span>
+              <span id="phase" class="-mt-8">Idle</span>
             </div>
 
-            <div class="conversation" aria-live="polite">
-              <div class="message message-user">
-                <span class="message-label">User</span>
-                <p id="request-preview">Change my delivery address to 42 Wallaby Way, Sydney.</p>
+            <div class="grid gap-2.5 pb-[22px]" aria-live="polite">
+              <div class="border-l-2 border-lime-300 bg-black/15 px-3.5 py-3">
+                <span class="mb-1 block text-[0.65rem] font-extrabold tracking-[0.17em] text-lime-300 uppercase">User</span>
+                <p id="request-preview" class="m-0 text-sm leading-relaxed text-[#e6ebe0]">Change my delivery address to 42 Wallaby Way, Sydney.</p>
               </div>
-              <div class="message message-assistant">
-                <span class="message-label">Assistant</span>
-                <p id="assistant-response">Ready to check your address.</p>
+              <div class="border-l-2 border-cyan-300 bg-black/15 px-3.5 py-3">
+                <span class="mb-1 block text-[0.65rem] font-extrabold tracking-[0.17em] text-lime-300 uppercase">Assistant</span>
+                <p id="assistant-response" class="m-0 text-sm leading-relaxed text-[#e6ebe0]">Ready to check your address.</p>
               </div>
-              <div id="interruption-note" class="interruption-note" hidden></div>
+              <div id="interruption-note" class="rounded-lg border border-orange-300/35 bg-orange-950/30 px-3 py-2.5 text-sm text-orange-200" hidden></div>
             </div>
 
-            <form id="address-form" class="control-form">
-              <label for="address">Delivery address</label>
-              <div class="input-wrap">
-                <input id="address" name="address" autocomplete="street-address" value="42 Wallaby Way, Sydney" required />
-                <button type="submit">Start lookup</button>
+            <form id="address-form" class="mt-auto">
+              <label class="mb-2 block text-xs text-[#c4cebd]" for="address">Delivery address</label>
+              <div class="flex gap-2.5 max-sm:flex-col">
+                <input id="address" class="min-w-0 flex-1 rounded-lg border border-lime-100/30 bg-[#121a11] px-3.5 py-3 text-[#f2f5ed] outline-none focus:border-lime-300 focus:ring-3 focus:ring-lime-300/10" name="address" autocomplete="street-address" value="42 Wallaby Way, Sydney" required />
+                <button class="rounded-lg bg-lime-300 px-4 py-3 font-extrabold text-lime-950 hover:bg-lime-200" type="submit">Start lookup</button>
               </div>
             </form>
-            <button id="interrupt" class="interrupt-button" type="button">Interrupt current turn</button>
+            <button id="interrupt" class="mt-2.5 w-full rounded-lg bg-[#3c2620] px-4 py-3 font-extrabold text-orange-200 hover:bg-[#583126] disabled:cursor-not-allowed disabled:opacity-35" type="button">Interrupt current turn</button>
           </article>
 
-          <aside class="side-column">
-            <article class="panel order-panel">
-              <div class="panel-heading">
+          <aside>
+            <article class="rounded-2xl border border-lime-100/20 bg-[#1c2319]/90 p-5 shadow-2xl shadow-black/20 sm:p-7">
+              <div class="flex items-center justify-between gap-4">
                 <div>
-                  <p class="eyebrow">ORDER STATE</p>
-                  <h2>Current order</h2>
+                  <p class="mb-2 text-[0.65rem] font-extrabold tracking-[0.17em] text-lime-300 uppercase">Order state</p>
+                  <h2 class="text-lg font-bold tracking-tight text-[#f8f9f2]">Current order</h2>
                 </div>
-                <span id="status" class="status-text">Idle</span>
+                <span id="status" class="text-xs text-lime-300 capitalize">Idle</span>
               </div>
-              <div class="order-address">
-                <span class="field-label">Current address</span>
-                <strong id="order-address">123 Placeholder St, Springfield</strong>
+              <div class="border-b border-lime-100/20 py-7">
+                <span class="text-[0.65rem] font-extrabold tracking-[0.17em] text-lime-300 uppercase">Current address</span>
+                <strong id="order-address" class="mt-2 block text-xl leading-tight font-semibold tracking-tight text-[#f6f7ef]">123 Placeholder St, Springfield</strong>
               </div>
-              <div class="order-facts">
-                <div><span>ETA</span><strong id="order-eta">30 minutes</strong></div>
-                <div><span>Order status</span><strong id="order-status">confirmed</strong></div>
+              <div class="grid grid-cols-2 gap-4 pt-5">
+                <div><span class="block text-xs text-[#a2ad9c]">ETA</span><strong id="order-eta" class="mt-1 block text-sm font-medium text-[#dce5d5]">30 minutes</strong></div>
+                <div><span class="block text-xs text-[#a2ad9c]">Order status</span><strong id="order-status" class="mt-1 block text-sm font-medium text-[#dce5d5] capitalize">confirmed</strong></div>
               </div>
-              <p class="order-proof">A stale batch may finish late, but it cannot overwrite this order.</p>
+              <p class="mb-0 mt-6 text-sm leading-relaxed text-[#b4cb9b]">A stale batch may finish late, but it cannot overwrite this order.</p>
             </article>
           </aside>
         </section>
 
-        <section class="panel events-panel">
-          <div class="panel-heading">
+        <section class="mt-[18px] rounded-2xl border border-lime-100/20 bg-[#1c2319]/90 p-5 shadow-2xl shadow-black/20 sm:p-7">
+          <div class="flex items-center justify-between gap-4">
             <div>
-              <p class="eyebrow">EPOCH EVENT TIMELINE</p>
-              <h2>Proof that stale work was fenced</h2>
+              <p class="mb-2 text-[0.65rem] font-extrabold tracking-[0.17em] text-lime-300 uppercase">Epoch event timeline</p>
+              <h2 class="text-lg font-bold tracking-tight text-[#f8f9f2]">Proof that stale work was fenced</h2>
             </div>
-            <span class="timeline-note">Newest first</span>
+            <span class="text-xs text-[#9da997]">Newest first</span>
           </div>
-          <ol id="events" class="events" aria-live="polite"></ol>
+          <ol id="events" class="mt-6 grid list-none p-0" aria-live="polite"></ol>
         </section>
       </main>
     </div>

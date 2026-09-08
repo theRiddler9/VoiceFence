@@ -8,7 +8,9 @@
     "test": "tsx --test server/epoch_demo.test.ts"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^22.10.0",
+    "tailwindcss": "^4.3.3",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vite": "^6.0.5"

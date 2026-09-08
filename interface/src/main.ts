@@ -1,4 +1,4 @@
-import "./style.css";
+import "./tailwind.css";
 
 type EventRecord = {
   event: string;
@@ -82,6 +82,10 @@ function addEventRow(item: EventRecord): HTMLLIElement {
   const detail = document.createElement("span");
   const extras = [item.reason, item.source, item.purpose].filter(Boolean).join(" / ");
 
+  row.className = "grid grid-cols-[95px_185px_1fr] items-center gap-3 border-t border-lime-100/20 py-3 text-xs max-sm:grid-cols-1 max-sm:gap-1";
+  time.className = "text-[#9da997]";
+  name.className = "font-bold text-lime-200";
+  detail.className = "text-[#9da997]";
   time.textContent = new Date(item.timestamp).toLocaleTimeString();
   name.textContent = item.event;
   detail.textContent = `${item.batchId || "no batch"} · epoch ${item.epoch}${extras ? ` · ${extras}` : ""}`;
@@ -104,6 +108,7 @@ function render(state: InterfaceState): void {
   audioState.textContent = currentAudioState;
   audioState.dataset.state = state.status;
   voiceOrb.dataset.state = state.phase;
+  voiceOrb.classList.toggle("animate-pulse", state.phase === "speaking");
   assistantResponse.textContent = getAssistantResponse(state);
   interruptionNote.hidden = state.status !== "interrupted" && state.status !== "stale-dropped";
   interruptionNote.textContent = recentInterruption

@@ -1,3 +1,5 @@
+// The bundler loads this stylesheet; TypeScript has no declaration for CSS imports.
+// @ts-expect-error CSS is handled at build time.
 import "./style.css";
 
 type EventRecord = {

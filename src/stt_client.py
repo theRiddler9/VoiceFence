@@ -24,7 +24,10 @@ _ADDRESS_UPDATE = re.compile(
     r"(?:change|update|set)\b.*?\baddress\s+to\s+(.+?)(?=\s+actually\b|$)",
     re.IGNORECASE,
 )
-_CORRECTION = re.compile(r"(?:actually\s+)?make\s+it\s+(.+)$", re.IGNORECASE)
+_CORRECTION = re.compile(
+    r"(?:actually\b(?:(?!\bmake\s+it\b).)*?)?\bmake\s+it\s+(.+?)(?=\s*,?\s+actually\b|$)",
+    re.IGNORECASE,
+)
 
 
 def _clean_payload(payload: str) -> str:
@@ -47,5 +50,5 @@ def extract_address(event: TranscriptEvent) -> AddressIntent | None:
     for match in reversed(matches):
         address = _clean_payload(match.group(1))
         if _plausible(address):
-            return AddressIntent(address, text, event.is_final, event.timestamp)
+            return AddressIntent(address, event.text, event.is_final, event.timestamp)
     return None

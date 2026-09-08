@@ -49,3 +49,24 @@ did not find executable at 'C:\Users\riyaj\AppData\Local\Programs\Python\Python3
 ## Concerns
 
 - The bundled `.venv` Python launcher cannot access its configured Python 3.13 executable, so pytest could not run in this environment. A functioning interpreter should run `tests/test_stt_client.py` and the complete suite before integration.
+
+## Fix Round 1
+
+### Changes
+
+- Added regression coverage for multiple corrections, polite/filler wording after `actually`, and preservation of raw transcript text.
+- Updated correction matching to find each explicit `make it` correction and select the latest one.
+- Allowed intervening wording between `actually` and `make it`.
+- Kept normalized text for parsing while storing the original `event.text` in `AddressIntent.transcript`.
+
+### Tests
+
+The targeted pytest command was rerun, but the bundled launcher again failed before collection with the inaccessible Python 3.13 executable error noted above. `git diff --check` passed.
+
+### Commit
+
+`48a124b`
+
+### Concerns
+
+Automated test execution remains blocked by the environment's Python launcher permissions; controller verification is required.

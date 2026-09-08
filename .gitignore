@@ -1,8 +1,7 @@
 venv/
 __pycache__/
 *.pyc
-.env
 .pytest_cache/
-*.pcm
-*.wav
-*.mp3
+tests/logs/
+venv/
+venv/

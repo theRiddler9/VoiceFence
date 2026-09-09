@@ -1,67 +1,43 @@
 # VoiceFence
 
-VoiceFence is a voice-address-update demo built around one safety rule: an
-interrupted request must never write or speak a late result. It demonstrates
-that rule locally without credentials, and can run as a continuous-listening
-LiveKit agent when the provider configuration is available.
+VoiceFence is a voice-native delivery assistant built around one safety rule:
+an interrupted request must never write or speak a late result. It runs as a
+continuous-listening LiveKit agent and includes a credential-free deterministic
+demo of the same end-to-end fencing behavior.
 
 ## What the demo proves
 
-The scripted scenario is deliberately small:
+1. The caller requests an address change to `42 Wallaby Way, Sydney`.
+2. The deliberately delayed order update begins.
+3. The caller interrupts and corrects it to `221B Baker Street, London`.
+4. The old epoch and shared batch are cancelled.
+5. The late result is dropped; only the corrected address is stored and spoken.
 
-1. The caller asks to change an address to `42 Wallaby Way, Sydney`.
-2. The order update starts but is held in progress.
-3. While the assistant is speaking, the caller interrupts and corrects the
-   address to `221B Baker Street, London`.
-4. The first epoch is cancelled. When its delayed store operation is released,
-   it is dropped; only the corrected address is saved and confirmed.
-
-The offline demo waits for explicit store-start and store-release events rather
-than relying on a sleep to make an overlap likely.
+The offline scenario uses explicit synchronization rather than timing guesses,
+so the race and its expected outcome are reproducible.
 
 ## Architecture
 
 ```text
 User speech
-  -> LiveKit speech-state / transcript events
+  -> LiveKit VAD and Deepgram streaming STT
   -> provider-neutral VoicePipeline
   -> EpochOrchestrator
-  -> fenced OrderStore update and session-managed Rime confirmation
+  -> fenced OrderStore update
+  -> session-managed Rime confirmation
 ```
 
-`VoicePipeline` is independent of LiveKit and provider SDKs. It detects
-barge-in on real user-speech-start while assistant speech is active, then calls
-the orchestrator immediately; it does not wait for a final transcript. The
-orchestrator owns the monotonically increasing epoch and cancels the active
-batch. Both tool work and speech are tagged with that batch, so late work is
-fenced before it can update the order or produce a confirmation.
+Every tool call and speech request receives a monotonically increasing epoch
+and unique batch ID. Barge-in immediately advances the epoch and cancels the
+active batch. The registry lock is the common linearization point for
+cancellation and order commits, preventing a timed-out or superseded update
+from mutating state.
 
-For the live path, `src.agent` builds a LiveKit `AgentSession` with Deepgram
-Nova-3 STT, Silero VAD, and Rime TTS. Confirmations are played by the
-session-managed LiveKit speaker, so barge-in interrupts the actual session
-playout as well as advancing the epoch. The Silero model is prewarmed once per
-worker process before a room is assigned.
-
-Transcript processing accepts interim and final text. It deduplicates
-item-id-backed turns and handles anonymous finals that arrive after a VAD
-boundary, while still allowing a genuine later correction to be processed.
-
-## Quick start: offline demo
-
-The offline demo does not need the optional LiveKit, Deepgram, or Rime runtime
-packages or credentials. It does not open a microphone, audio device, or
-network connection.
-
-After installing the project dependencies, run:
-
-```bash
-python voice_demo.py
-```
-
-It prints JSON evidence containing the final order, serializable orchestrator
-results, recorded confirmations, and structured pipeline events. The final
-order and only confirmation should use `221B Baker Street, London`, and the
-events include `barge-in-detected`.
+`VoicePipeline` handles interim and final transcripts, corrections, anonymous
+VAD turns, canonical deduplication, and concurrent callback serialization. The
+live runtime uses LiveKit `AgentSession`, Deepgram Nova-3 STT, prewarmed Silero
+VAD, and Rime TTS. LiveKit owns playback, allowing interruption to stop both
+session audio and the associated epoch.
 
 ## Setup
 
@@ -76,13 +52,6 @@ python -m pip install -r requirements.txt
 Copy-Item .env.example .env
 ```
 
-If PowerShell prevents activation, use the environment's interpreter directly:
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe voice_demo.py
-```
-
 ### macOS and Linux
 
 ```bash
@@ -94,84 +63,89 @@ python -m pip install -r requirements.txt
 cp .env.example .env
 ```
 
-The `.env` file is a template; this project reads the live-agent settings from
-the process environment. Set the required values in the shell that starts the
-agent.
+Never commit the populated `.env` file.
 
-## Running tests
+## Offline demo
 
-With the virtual environment active:
+The offline demo needs no provider credentials, microphone, audio device, or
+network connection:
 
 ```bash
-pytest -v
+python voice_demo.py
 ```
 
-The tests use local fakes and deterministic synchronization. They do not make
-provider requests, require API keys, or require audio hardware.
+It prints JSON evidence. The first result must be `stale-dropped`, the corrected
+result must be `completed`, and the only saved and spoken address must be
+`221B Baker Street, London`.
 
-## Running the LiveKit agent
+## Live agent
 
-The live worker requires all of these environment variables:
+Configure these environment variables before starting the worker:
 
 | Variable | Purpose |
 | --- | --- |
-| `LIVEKIT_URL` | LiveKit server WebSocket URL. |
-| `LIVEKIT_API_KEY` | LiveKit API key. |
-| `LIVEKIT_API_SECRET` | LiveKit API secret. |
-| `DEEPGRAM_API_KEY` | Deepgram streaming STT credential. |
-| `RIME_API_KEY` | Rime TTS credential used by the LiveKit session. |
+| `LIVEKIT_URL` | LiveKit WebSocket URL |
+| `LIVEKIT_API_KEY` | LiveKit API key |
+| `LIVEKIT_API_SECRET` | LiveKit API secret |
+| `DEEPGRAM_API_KEY` | Deepgram streaming STT credential |
+| `RIME_API_KEY` | Rime TTS credential |
 
-`DEEPGRAM_MODEL` defaults to `nova-3` and `DEEPGRAM_LANGUAGE` defaults to
-`en`. `RIME_MODEL_ID`, `RIME_SPEAKER`, `RIME_LANGUAGE`,
-`RIME_SAMPLING_RATE`, and `RIME_SPEED_ALPHA` select the Rime voice and have
-safe defaults. `MOCK_LOOKUP_DELAY_SECONDS` controls the in-memory backend
-delay used for experiments. Never commit real credentials.
-
-In PowerShell, for example:
-
-```powershell
-$env:LIVEKIT_URL = "wss://your-livekit-host"
-$env:LIVEKIT_API_KEY = "your_livekit_api_key"
-$env:LIVEKIT_API_SECRET = "your_livekit_api_secret"
-$env:DEEPGRAM_API_KEY = "your_deepgram_api_key"
-$env:RIME_API_KEY = "your_rime_api_key"
-python -m src.agent dev
-```
-
-On macOS or Linux:
+Deepgram defaults to model `nova-3` and language `en`. Rime defaults are listed
+in `.env.example`, including `mistv2`, speaker `astra`, and 16 kHz output.
 
 ```bash
-export LIVEKIT_URL='wss://your-livekit-host'
-export LIVEKIT_API_KEY='your_livekit_api_key'
-export LIVEKIT_API_SECRET='your_livekit_api_secret'
-export DEEPGRAM_API_KEY='your_deepgram_api_key'
-export RIME_API_KEY='your_rime_api_key'
 python -m src.agent dev
 ```
 
-The agent validates these values before it connects. Speak an address update,
-then begin speaking again while the confirmation is active to exercise the
-barge-in path.
+## Tests
+
+The Python suite is deterministic, offline, and requires no API keys or audio
+hardware:
+
+```bash
+python -m pytest -q
+```
+
+It covers batch cancellation, atomic order commits, stale epochs, timeout
+races, streaming speech cancellation, transcript extraction and deduplication,
+barge-in, and complete correction scenarios.
+
+## Web interface
+
+The `interface/` directory provides the TypeScript/Vite visualization added on
+`main`. It displays microphone state, epoch and batch state, current order, Rime
+configuration status without exposing the key, and the interruption event log.
+Its backend is a demo adapter; the production voice path remains the Python
+LiveKit agent.
+
+```powershell
+Set-Location interface
+npm.cmd install
+npm.cmd test
+npm.cmd run build
+npm.cmd run dev
+```
 
 ## Repository layout
 
 ```text
 src/
   agent.py            LiveKit composition root and event adapters
-  stt_client.py       Provider-neutral transcript, deduplication, and barge-in logic
-  orchestrator.py     Epoch fencing and cancellation ownership
-  batch_registry.py   Thread-safe cancelled-batch registry
-  order_store.py      In-memory delayed, cancellable address store
-  rime_speaker.py     Standalone Rime PCM speaker used outside the live session
-voice_demo.py         Credential-free deterministic end-to-end demo
-demo.py               Standalone epoch/Rime smoke demonstration
-tests/                Offline unit and integration-contract tests
+  stt_client.py       Transcript parsing, deduplication, and barge-in logic
+  orchestrator.py     Epoch fencing, cancellation, and timeout ownership
+  batch_registry.py   Atomic cancelled-batch registry
+  order_store.py      Delayed, cancellable in-memory order store
+  rime_speaker.py     Standalone Rime PCM speaker
+interface/            TypeScript/Vite demo and visualization
+voice_demo.py         Credential-free end-to-end voice-pipeline demo
+demo.py               Standalone epoch/Rime demonstration
+tests/                Unit, integration, and scenario tests
 ```
 
-## Scope and limits
+## Scope and limitations
 
-VoiceFence intentionally focuses on one delivery-address correction flow. It
-does not include a database, telephony/SIP bridge, general conversational
-intent recognition, multilingual tuning, deployment, or authentication. The
-store is an in-memory mock so the safety behavior can be inspected and tested
-without external infrastructure.
+VoiceFence focuses on delivery-address correction and interruption safety. The
+order store is intentionally in memory. Telephony/SIP, persistence,
+authentication, deployment, and multilingual production tuning are outside the
+current scope. Browser waveform visualization is local microphone input, not a
+LiveKit audio stream; real latency claims require measured acceptance runs.

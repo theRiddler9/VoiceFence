@@ -97,6 +97,7 @@ class VoicePipeline:
         self._anonymous_last_address_key: Optional[str] = None
         self._anonymous_interim_address_key: Optional[str] = None
         self._lock = threading.Lock()
+        self._callback_lock = threading.Lock()
 
     def set_assistant_speaking(self, speaking: bool) -> None:
         with self._lock:
@@ -168,40 +169,55 @@ class VoicePipeline:
                     self._anonymous_interim_address_key = None
                     return
 
-        try:
-            self._on_address_intent(intent.address)
-        except Exception as exc:
+        with self._callback_lock:
+            # Re-check after waiting: an earlier callback may have committed
+            # this same revision while this event was queued.
+            with self._lock:
+                if turn_key is not None:
+                    if address_key == self._last_address_by_turn.get(turn_key):
+                        return
+                elif event.is_final and address_key == self._anonymous_interim_address_key:
+                    self._anonymous_interim_address_key = None
+                    return
+                elif address_key == self._anonymous_last_address_key:
+                    is_duplicate = False
+                    if not event.is_final and address_key == self._anonymous_interim_address_key:
+                        is_duplicate = True
+                    if event.is_final:
+                        self._anonymous_interim_address_key = None
+                        is_duplicate = True
+                    if is_duplicate:
+                        return
             try:
-                self._emit(
-                    "address-intent-error",
-                    event.timestamp,
-                    address=intent.address,
-                    transcript=intent.transcript,
-                    is_final=intent.is_final,
-                    turn_id=event.turn_id,
-                    error=str(exc),
-                )
-            except Exception:
-                # Diagnostics must not mask the callback failure being surfaced.
-                pass
-            raise
+                self._on_address_intent(intent.address)
+            except Exception as exc:
+                try:
+                    self._emit(
+                        "address-intent-error",
+                        event.timestamp,
+                        address=intent.address,
+                        transcript=intent.transcript,
+                        is_final=intent.is_final,
+                        turn_id=event.turn_id,
+                        error=str(exc),
+                    )
+                except Exception:
+                    pass
+                raise
 
-        with self._lock:
-            if turn_key is not None:
-                self._anonymous_interim_address_key = None
-                self._remember_turn_address(turn_key, address_key)
-            elif (
-                address_key == self._anonymous_last_address_key
-                and not event.is_final
-            ):
-                self._anonymous_interim_address_key = address_key
-            else:
-                self._anonymous_last_address_key = address_key
-                self._anonymous_interim_address_key = (
-                    address_key if not event.is_final else None
-                )
+            with self._lock:
+                if turn_key is not None:
+                    self._anonymous_interim_address_key = None
+                    self._remember_turn_address(turn_key, address_key)
+                elif address_key == self._anonymous_last_address_key and not event.is_final:
+                    self._anonymous_interim_address_key = address_key
+                else:
+                    self._anonymous_last_address_key = address_key
+                    self._anonymous_interim_address_key = (
+                        address_key if not event.is_final else None
+                    )
 
-        self._emit("address-intent", event.timestamp, address=intent.address)
+            self._emit("address-intent", event.timestamp, address=intent.address)
 
     def _remember_turn_address(self, turn_key: str, address: str) -> None:
         self._last_address_by_turn[turn_key] = address

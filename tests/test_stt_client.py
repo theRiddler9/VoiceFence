@@ -1,4 +1,5 @@
 import pytest
+import threading
 
 from src.stt_client import TranscriptEvent, VoicePipeline, extract_address
 
@@ -278,6 +279,62 @@ def test_dedup_uses_canonical_address_key_but_preserves_callback_text():
     )
 
     assert addresses == ["221B Baker Street"]
+
+
+def test_concurrent_duplicate_transcripts_invoke_callback_once():
+    entered = threading.Event()
+    release = threading.Event()
+    addresses = []
+
+    def callback(address):
+        addresses.append(address)
+        entered.set()
+        assert release.wait(1)
+
+    pipeline = VoicePipeline(lambda: None, callback)
+    event = TranscriptEvent(
+        "make it 221B Baker Street", False, 70.0, turn_id="concurrent-turn"
+    )
+    first = threading.Thread(target=pipeline.on_transcript, args=(event,))
+    second = threading.Thread(target=pipeline.on_transcript, args=(event,))
+    first.start()
+    assert entered.wait(1)
+    second.start()
+    release.set()
+    first.join(1)
+    second.join(1)
+
+    assert addresses == ["221B Baker Street"]
+
+
+def test_concurrent_revisions_preserve_callback_order():
+    first_entered = threading.Event()
+    release_first = threading.Event()
+    addresses = []
+
+    def callback(address):
+        if address == "1 First Street":
+            first_entered.set()
+            assert release_first.wait(1)
+        addresses.append(address)
+
+    pipeline = VoicePipeline(lambda: None, callback)
+    first = threading.Thread(
+        target=pipeline.on_transcript,
+        args=(TranscriptEvent("make it 1 First Street", False, 71.0, turn_id="revision-turn"),),
+    )
+    second = threading.Thread(
+        target=pipeline.on_transcript,
+        args=(TranscriptEvent("make it 10 Downing Street", True, 71.1, turn_id="revision-turn"),),
+    )
+    first.start()
+    assert first_entered.wait(1)
+    second.start()
+    release_first.set()
+    first.join(1)
+    second.join(1)
+
+    assert addresses == ["1 First Street", "10 Downing Street"]
 
 
 def test_blank_transcript_emits_structured_ignored_diagnostic():

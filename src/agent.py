@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import threading
 import time
 from collections.abc import Callable
 from concurrent.futures import Future, TimeoutError
@@ -72,6 +73,8 @@ class LiveKitSessionSpeaker:
         self._session = session
         self._loop = loop
         self._registry = registry
+        self._playout_lock = threading.Lock()
+        self._pending_playouts = 0
 
     def speak(
         self,
@@ -84,6 +87,9 @@ class LiveKitSessionSpeaker:
             self._play(text, batch_id),
             self._loop,
         )
+        with self._playout_lock:
+            self._pending_playouts += 1
+        future.add_done_callback(self._playout_finished)
         task = LiveKitPlayoutTask(future)
         if blocking:
             task.join()
@@ -98,9 +104,24 @@ class LiveKitSessionSpeaker:
             speech.interrupt(force=True)
             return
         await speech.wait_for_playout()
+        if error := speech.exception():
+            raise error
+
+    def _playout_finished(self, _: Future[None]) -> None:
+        with self._playout_lock:
+            self._pending_playouts -= 1
 
     def interrupt(self) -> None:
         """Stop current session playout from either SDK or worker callbacks."""
+        with self._playout_lock:
+            if self._pending_playouts == 0:
+                return
+        try:
+            if asyncio.get_running_loop() is self._loop:
+                self._interrupt_on_session_loop()
+                return
+        except RuntimeError:
+            pass
         self._loop.call_soon_threadsafe(self._interrupt_on_session_loop)
 
     def _interrupt_on_session_loop(self) -> None:
@@ -127,6 +148,10 @@ class LiveKitBargeInBridge:
         self._speaker.interrupt()
 
     def on_address_intent(self, address: str) -> Any:
+        # The orchestrator continues to own epoch changes. Stop actual room
+        # playout first so a superseded batch cannot keep talking while the
+        # new epoch is created by the orchestrator.
+        self._speaker.interrupt()
         return self._orchestrator.on_address_intent(address)
 
 

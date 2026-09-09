@@ -1,6 +1,7 @@
 """Provider-neutral transcript values and deterministic address extraction."""
 
 from dataclasses import dataclass, field
+from collections import OrderedDict
 import re
 import threading
 import time
@@ -71,6 +72,9 @@ EventSink = Callable[[dict[str, Any]], None]
 class VoicePipeline:
     """Route continuous-listening speech events to interruption and intent hooks."""
 
+    MAX_TURN_DEDUP_ENTRIES = 32
+    MAX_ANONYMOUS_DEDUP_ENTRIES = 32
+
     def __init__(
         self,
         on_barge_in: Callable[[], None],
@@ -83,7 +87,8 @@ class VoicePipeline:
         self._assistant_speaking = False
         self._user_speaking = False
         self._barge_in_emitted = False
-        self._last_address_by_turn: dict[str, str] = {}
+        self._last_address_by_turn: OrderedDict[str, str] = OrderedDict()
+        self._recent_anonymous_addresses: OrderedDict[str, None] = OrderedDict()
         self._anonymous_turn = 0
         self._lock = threading.Lock()
 
@@ -118,13 +123,38 @@ class VoicePipeline:
             return
 
         with self._lock:
-            turn_key = event.turn_id or f"anonymous-{self._anonymous_turn}"
+            turn_key = (
+                f"item:{event.turn_id}"
+                if event.turn_id
+                else f"anonymous:{self._anonymous_turn}"
+            )
             if intent.address == self._last_address_by_turn.get(turn_key):
+                self._last_address_by_turn.move_to_end(turn_key)
                 return
-            self._last_address_by_turn[turn_key] = intent.address
+            if (
+                event.turn_id is None
+                and intent.address in self._recent_anonymous_addresses
+            ):
+                self._recent_anonymous_addresses.move_to_end(intent.address)
+                return
+            self._remember_turn_address(turn_key, intent.address)
+            if event.turn_id is None:
+                self._remember_anonymous_address(intent.address)
 
         self._on_address_intent(intent.address)
         self._emit("address-intent", event.timestamp, address=intent.address)
+
+    def _remember_turn_address(self, turn_key: str, address: str) -> None:
+        self._last_address_by_turn[turn_key] = address
+        self._last_address_by_turn.move_to_end(turn_key)
+        while len(self._last_address_by_turn) > self.MAX_TURN_DEDUP_ENTRIES:
+            self._last_address_by_turn.popitem(last=False)
+
+    def _remember_anonymous_address(self, address: str) -> None:
+        self._recent_anonymous_addresses[address] = None
+        self._recent_anonymous_addresses.move_to_end(address)
+        while len(self._recent_anonymous_addresses) > self.MAX_ANONYMOUS_DEDUP_ENTRIES:
+            self._recent_anonymous_addresses.popitem(last=False)
 
     def _emit(self, event: str, timestamp: float, **fields: Any) -> None:
         if self._event_sink is None:

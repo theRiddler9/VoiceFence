@@ -58,6 +58,9 @@ class FakePlaybackHandle:
     async def wait_for_playout(self):
         await self._done.wait()
 
+    def exception(self):
+        return None
+
 
 class LoopBoundSession:
     def __init__(self):
@@ -79,6 +82,19 @@ class FailingLoopBoundSession:
 class TimedOutLoopBoundSession:
     def say(self, text, *, allow_interruptions):
         raise TimeoutError("session playout timed out")
+
+
+class PostPlayoutFailingHandle:
+    async def wait_for_playout(self):
+        return None
+
+    def exception(self):
+        return RuntimeError("Rime playout failed after start")
+
+
+class PostPlayoutFailingSession:
+    def say(self, text, *, allow_interruptions):
+        return PostPlayoutFailingHandle()
 
 
 class FakeSTT:
@@ -117,6 +133,7 @@ class FakeAgentSession:
         self.say_calls = []
         self.interrupt_calls = []
         self.playout_handles = []
+        self.playout_events = []
 
     def on(self, event_name, handler):
         self.handlers[event_name] = handler
@@ -128,11 +145,13 @@ class FakeAgentSession:
         handle = FakePlaybackHandle()
         self.say_calls.append((text, allow_interruptions))
         self.playout_handles.append(handle)
+        self.playout_events.append(("say", text))
         self.emit("agent_state_changed", SimpleNamespace(new_state="speaking"))
         return handle
 
     def interrupt(self, *, force):
         self.interrupt_calls.append(force)
+        self.playout_events.append(("interrupt", force))
         for handle in self.playout_handles:
             handle.finish()
         self.emit("agent_state_changed", SimpleNamespace(new_state="listening"))
@@ -254,7 +273,7 @@ def test_livekit_session_speaker_crosses_worker_threads_and_tracks_playout():
 
         worker = threading.Thread(target=invoke_from_worker)
         worker.start()
-        worker.join(1)
+        await asyncio.to_thread(worker.join, 1)
 
         for _ in range(20):
             if session.say_calls:
@@ -320,6 +339,32 @@ def test_livekit_session_speaker_surfaces_playout_timeout_exceptions():
 
         assert task.is_alive() is False
         with pytest.raises(TimeoutError, match="session playout timed out"):
+            await asyncio.to_thread(task.join, 1)
+
+    asyncio.run(exercise())
+
+
+def test_livekit_session_speaker_surfaces_post_playout_exceptions():
+    """Catches a completed speech handle whose provider failure is ignored."""
+    import pytest
+
+    from src.agent import LiveKitSessionSpeaker
+
+    async def exercise():
+        speaker = LiveKitSessionSpeaker(
+            PostPlayoutFailingSession(),
+            loop=asyncio.get_running_loop(),
+            registry=BatchRegistry(),
+        )
+        task = speaker.speak("confirmation", "batch-livekit", blocking=False)
+
+        for _ in range(20):
+            if not task.is_alive():
+                break
+            await asyncio.sleep(0.01)
+
+        assert task.is_alive() is False
+        with pytest.raises(RuntimeError, match="Rime playout failed after start"):
             await asyncio.to_thread(task.join, 1)
 
     asyncio.run(exercise())
@@ -444,6 +489,61 @@ def test_session_managed_playout_barge_in_stops_audio_and_advances_epoch(monkeyp
 
         assert session.interrupt_calls == [True]
         assert bridge._orchestrator.current_epoch == 2
+
+    asyncio.run(exercise())
+
+
+def test_superseding_address_stops_session_playout_before_new_confirmation(monkeypatch):
+    """Catches an epoch-only supersession that leaves stale room audio queued."""
+    import src.agent as agent_module
+
+    async def exercise():
+        set_runtime_environment(monkeypatch)
+        monkeypatch.setattr(agent_module.config, "MOCK_LOOKUP_DELAY_SECONDS", 0.0)
+        modules = fake_livekit_modules()
+        monkeypatch.setattr(agent_module, "_load_livekit", lambda: modules)
+        room = SimpleNamespace(lifecycle=[])
+        ctx = SimpleNamespace(room=room)
+
+        async def connect():
+            room.lifecycle.append("connect")
+
+        ctx.connect = connect
+        await agent_module.entrypoint(ctx)
+        session = FakeAgentSession.last
+        session.emit(
+            "user_input_transcribed",
+            SimpleNamespace(
+                transcript="make it 1 First Street",
+                is_final=True,
+                item_id="first-turn",
+            ),
+        )
+
+        for _ in range(50):
+            if len(session.say_calls) == 1:
+                break
+            await asyncio.sleep(0.01)
+
+        session.emit(
+            "user_input_transcribed",
+            SimpleNamespace(
+                transcript="make it 10 Downing Street",
+                is_final=True,
+                item_id="corrected-turn",
+            ),
+        )
+
+        for _ in range(50):
+            if len(session.say_calls) == 2:
+                break
+            await asyncio.sleep(0.01)
+
+        assert session.playout_events == [
+            ("say", "Sure, I've updated your address to 1 First Street."),
+            ("interrupt", True),
+            ("say", "Sure, I've updated your address to 10 Downing Street."),
+        ]
 
     asyncio.run(exercise())
 

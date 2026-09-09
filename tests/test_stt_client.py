@@ -138,3 +138,40 @@ def test_later_different_correction_in_same_segment_is_emitted():
     pipeline.on_transcript(TranscriptEvent("make it 10 Downing Street", False, 1.1))
 
     assert addresses == ["221B Baker Street", "10 Downing Street"]
+
+
+def test_anonymous_late_final_stays_deduplicated_across_next_speech_start():
+    """Catches a no-item-id final that arrives after the next VAD segment starts."""
+    addresses = []
+    pipeline = VoicePipeline(lambda: None, addresses.append)
+
+    pipeline.on_user_speech_started(timestamp=30.0)
+    pipeline.on_transcript(TranscriptEvent("make it 221B Baker Street", False, 30.1))
+    pipeline.on_user_speech_ended(timestamp=30.2)
+    pipeline.on_user_speech_started(timestamp=30.3)
+    pipeline.on_transcript(TranscriptEvent("make it 221B Baker Street", True, 30.4))
+
+    assert addresses == ["221B Baker Street"]
+
+
+def test_turn_dedup_cache_evicts_the_least_recent_turn_at_its_bound():
+    """Catches unbounded item-id retention in a process that handles many calls."""
+    addresses = []
+    pipeline = VoicePipeline(lambda: None, addresses.append)
+
+    for number in range(VoicePipeline.MAX_TURN_DEDUP_ENTRIES + 1):
+        pipeline.on_transcript(
+            TranscriptEvent(
+                f"make it {number} Example Street",
+                True,
+                float(number),
+                turn_id=f"turn-{number}",
+            )
+        )
+
+    pipeline.on_transcript(
+        TranscriptEvent("make it 0 Example Street", True, 99.0, turn_id="turn-0")
+    )
+
+    assert addresses[-1] == "0 Example Street"
+    assert len(addresses) == VoicePipeline.MAX_TURN_DEDUP_ENTRIES + 2

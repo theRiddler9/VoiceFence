@@ -15,6 +15,7 @@ type EventRecord = {
 type InterfaceState = {
   source: "demo" | "live";
   livekitConfigured: boolean;
+  livekitConnected: boolean;
   currentEpoch: number;
   activeBatchId: string | null;
   status: string;
@@ -39,7 +40,6 @@ const rime = $("rime");
 const batch = $("batch");
 const phase = $("phase");
 const audioState = $("audio-state");
-const voiceOrb = $("voice-orb");
 const assistantResponse = $("assistant-response");
 const interruptionNote = $("interruption-note");
 const requestPreview = $("request-preview");
@@ -53,7 +53,6 @@ const interruptButton = $("interrupt") as HTMLButtonElement;
 const microphoneToggle = $("microphone-toggle") as HTMLButtonElement;
 const microphoneStatus = $("microphone");
 const microphoneMessage = $("microphone-message");
-const addressHint = $("address-hint");
 const visualizer = $("voice-visualizer") as HTMLCanvasElement;
 let microphoneStream: MediaStream | null = null;
 let audioContext: AudioContext | null = null;
@@ -125,7 +124,11 @@ function render(state: InterfaceState): void {
   connection.textContent = state.source === "live" ? "Live backend connected" : "Demo backend";
   epoch.textContent = String(state.currentEpoch);
   batch.textContent = state.activeBatchId ?? "No active batch";
-  livekit.textContent = state.livekitConfigured ? "Configured" : "Credentials missing";
+  livekit.textContent = !state.livekitConfigured
+    ? "Credentials missing"
+    : state.livekitConnected
+      ? "Room connected"
+      : "Credentials ready";
   rime.textContent = state.rimeConfigured ? "Configured" : "Key missing";
   rime.classList.toggle("is-ready", state.rimeConfigured);
   status.textContent = displayStatus(state.status);
@@ -133,8 +136,6 @@ function render(state: InterfaceState): void {
   phase.textContent = currentAudioState;
   audioState.textContent = currentAudioState;
   audioState.dataset.state = state.status;
-  voiceOrb.dataset.state = state.phase;
-  voiceOrb.classList.toggle("animate-pulse", state.phase === "speaking");
   assistantResponse.textContent = getAssistantResponse(state);
   interruptionNote.hidden = state.status !== "interrupted" && state.status !== "stale-dropped";
   interruptionNote.textContent = recentInterruption
@@ -148,7 +149,6 @@ function render(state: InterfaceState): void {
   requestPreview.textContent = state.source === "live"
     ? latestAddress?.address || latestAddress?.transcript || "Listening for an address request..."
     : addressInput.value || "Your words will appear here.";
-  addressHint.hidden = Boolean(addressInput.value);
 
   events.replaceChildren(...state.events.slice(-10).reverse().map(addEventRow));
 }
@@ -178,7 +178,6 @@ interruptButton.addEventListener("click", async () => {
 
 addressInput.addEventListener("input", () => {
   requestPreview.textContent = addressInput.value || "Your words will appear here.";
-  addressHint.hidden = Boolean(addressInput.value);
 });
 
 function drawVisualizer(analyser: AnalyserNode): void {

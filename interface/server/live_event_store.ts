@@ -10,11 +10,13 @@ export type LiveInterfaceEvent = {
   purpose?: string;
   order?: { address: string; eta_minutes?: number; status?: string };
   address?: string;
+  livekit_connected?: boolean;
 };
 
 export type LiveInterfaceState = {
   source: "live";
   livekitConfigured: boolean;
+  livekitConnected: boolean;
   currentEpoch: number;
   activeBatchId: string | null;
   status: "idle" | "lookup-pending" | "speaking" | "interrupted" | "completed" | "stale-dropped";
@@ -39,6 +41,7 @@ export class LiveEventStore {
     let activeBatchId: string | null = null;
     let status: LiveInterfaceState["status"] = "idle";
     let phase: LiveInterfaceState["phase"] = "idle";
+    let livekitConnected = false;
     let order = {
       address: "No address confirmed",
       etaMinutes: 0,
@@ -47,7 +50,9 @@ export class LiveEventStore {
 
     for (const event of events) {
       currentEpoch = Math.max(currentEpoch, event.epoch ?? 0);
-      if (event.event === "epoch-started") {
+      if (event.event === "runtime-status") {
+        livekitConnected = event.livekit_connected === true;
+      } else if (event.event === "epoch-started") {
         activeBatchId = event.batch_id ?? null;
         status = "lookup-pending";
         phase = "lookup";
@@ -80,6 +85,7 @@ export class LiveEventStore {
     return {
       source: "live",
       livekitConfigured: this.livekitConfigured,
+      livekitConnected,
       currentEpoch,
       activeBatchId,
       status,

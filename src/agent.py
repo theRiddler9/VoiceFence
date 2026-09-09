@@ -324,6 +324,7 @@ async def entrypoint(ctx: Any) -> None:
             raise agents.StopResponse()
 
     await ctx.connect()
+    event_bridge({"event": "runtime-status", "livekit_connected": True})
     await session.start(room=ctx.room, agent=VoiceFenceAgent())
 
 

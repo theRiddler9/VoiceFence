@@ -12,7 +12,7 @@ const port = Number(process.env.INTERFACE_PORT ?? 3000);
 const delayMs = Number(process.env.MOCK_LOOKUP_DELAY_SECONDS ?? 3) * 1000;
 const session = new InterfaceDemoSession(delayMs);
 const liveEvents = new LiveEventStore(
-  process.env.VOICEFENCE_EVENT_LOG ?? ".voicefence/live_events.jsonl",
+  process.env.VOICEFENCE_EVENT_LOG ?? fileURLToPath(new URL("../../.voicefence/live_events.jsonl", import.meta.url)),
   Boolean(process.env.RIME_API_KEY),
   Boolean(process.env.LIVEKIT_URL && process.env.LIVEKIT_API_KEY && process.env.LIVEKIT_API_SECRET),
 );

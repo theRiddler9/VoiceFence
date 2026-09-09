@@ -3,121 +3,120 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#11150f" />
-    <title>VoiceFence — Epoch control room</title>
+    <meta name="theme-color" content="#07111f" />
+    <title>VoiceFence - Epoch control room</title>
   </head>
-  <body class="min-w-80 bg-[#11150f] font-sans text-[#f5f7ef] antialiased">
-    <div class="min-h-screen bg-[radial-gradient(circle_at_88%_4%,rgba(151,213,54,0.13),transparent_30rem)] px-4 py-5 sm:px-7 lg:px-[4vw] lg:py-6">
-      <header class="flex items-center justify-between border-b border-lime-100/20 pb-5">
-        <a class="flex items-center gap-2.5 text-[0.98rem] font-extrabold tracking-tight text-[#f9faf3]" href="/" aria-label="VoiceFence home">
-          <span class="grid size-7 place-items-center rounded-lg bg-lime-300 text-[0.7rem] font-black tracking-tighter text-lime-950 shadow-[0_0_22px_rgba(202,255,77,0.22)]">VF</span>
+  <body class="min-w-80 bg-[#07111f] font-sans text-[#e8f0fa] antialiased">
+    <div class="min-h-screen bg-[radial-gradient(circle_at_50%_-10%,rgba(42,111,172,0.32),transparent_34rem)] px-4 py-5 sm:px-7 lg:px-[7vw] lg:py-7">
+      <header class="flex items-center justify-between border-b border-sky-100/15 pb-5">
+        <a class="flex items-center gap-2.5 text-[0.98rem] font-extrabold tracking-tight text-[#f4f8fd]" href="/" aria-label="VoiceFence home">
+          <span class="grid size-7 place-items-center rounded-lg bg-sky-300 text-[0.7rem] font-black tracking-tighter text-[#061321] shadow-[0_0_22px_rgba(125,211,252,0.25)]">VF</span>
           <span>VoiceFence</span>
         </a>
-        <span id="connection" class="text-xs text-lime-200">API connecting</span>
+        <span id="connection" class="text-xs text-sky-200">API connecting</span>
       </header>
 
-      <main>
-        <section class="grid gap-8 py-14 lg:grid-cols-[minmax(0,1fr)_minmax(290px,0.37fr)] lg:gap-[8vw] lg:py-[7vw]">
+      <main class="mx-auto max-w-6xl">
+        <section class="grid gap-8 py-14 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.4fr)] lg:items-end lg:py-24">
           <div>
-            <p class="mb-2 text-[0.65rem] font-extrabold tracking-[0.17em] text-lime-300 uppercase">Voice concurrency demo</p>
-            <h1 class="max-w-4xl text-5xl leading-[0.9] font-semibold tracking-[-0.075em] text-[#f9faf4] sm:text-7xl lg:text-[clamp(4rem,6vw,6.8rem)]">Only the current turn can act.</h1>
-            <p class="mt-5 max-w-2xl text-base leading-relaxed text-[#b3bdb0]">Interrupt a delayed address lookup and watch the old batch be fenced out of the order.</p>
+            <p class="mb-3 text-[0.65rem] font-extrabold tracking-[0.2em] text-sky-300 uppercase">Voice concurrency demo</p>
+            <h1 class="max-w-4xl text-5xl leading-[0.92] font-semibold tracking-[-0.055em] text-[#f4f8fd] sm:text-7xl">Say what needs changing.</h1>
+            <p class="mt-5 max-w-xl text-base leading-relaxed text-[#9fb4ca]">VoiceFence keeps the latest request in control when an earlier lookup is still running.</p>
           </div>
-          <div class="self-end border-l-2 border-lime-300 py-1 pl-4 text-sm leading-relaxed text-[#afb9a8]">
-            <strong class="mb-1 block text-[#f4f7eb]">Stress case</strong>
-            Start a lookup, interrupt it, then submit the corrected address.
+          <div class="border-l-2 border-sky-300 py-1 pl-4 text-sm leading-relaxed text-[#9fb4ca]">
+            <strong class="mb-1 block text-[#e8f4ff]">Current execution</strong>
+            Epoch <b id="epoch" class="text-sky-300">0</b><br />
+            <span id="batch">No active batch</span>
           </div>
         </section>
 
-        <section class="mb-[18px] grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4" aria-label="Voice connection status">
-          <article class="rounded-2xl border border-lime-100/20 bg-[#1c2319]/90 p-5 shadow-2xl shadow-black/20">
-            <span class="block text-xs text-[#9da997]">Microphone</span>
-            <strong id="microphone" class="my-2.5 block text-base text-[#eef4e5]">Demo input</strong>
-            <small class="block text-xs leading-snug text-[#9da997]">Browser microphone is not connected in this demo.</small>
+        <section class="grid gap-3.5 sm:grid-cols-3" aria-label="Voice connection status">
+          <article class="rounded-2xl border border-sky-100/15 bg-[#0d1d31]/90 p-5 shadow-2xl shadow-black/20">
+            <span class="block text-xs text-[#829ab3]">Microphone</span>
+            <strong id="microphone" class="my-2.5 block text-base text-[#e8f4ff]">Off</strong>
+            <button id="microphone-toggle" class="rounded-lg border border-sky-300/40 px-3 py-2 text-xs font-bold text-sky-200 hover:bg-sky-300/10" type="button">Start microphone</button>
           </article>
-          <article class="rounded-2xl border border-lime-100/20 bg-[#1c2319]/90 p-5 shadow-2xl shadow-black/20">
-            <span class="block text-xs text-[#9da997]">LiveKit</span>
-            <strong id="livekit" class="my-2.5 block text-base text-[#eef4e5]">Not connected</strong>
-            <small class="block text-xs leading-snug text-[#9da997]">LiveKit wiring is pending.</small>
+          <article class="rounded-2xl border border-sky-100/15 bg-[#0d1d31]/90 p-5 shadow-2xl shadow-black/20">
+            <span class="block text-xs text-[#829ab3]">LiveKit</span>
+            <strong id="livekit" class="my-2.5 block text-base text-[#e8f4ff]">Not connected</strong>
+            <small class="block text-xs leading-snug text-[#829ab3]">Voice room wiring pending.</small>
           </article>
-          <article class="rounded-2xl border border-lime-100/20 bg-[#1c2319]/90 p-5 shadow-2xl shadow-black/20">
-            <span class="block text-xs text-[#9da997]">Rime</span>
-            <strong id="rime" class="my-2.5 block text-base text-[#eef4e5]">Checking configuration</strong>
-            <small class="block text-xs leading-snug text-[#9da997]">Server-side key status only.</small>
-          </article>
-          <article class="rounded-2xl border border-lime-300/35 bg-gradient-to-br from-[#1d3919] to-[#223d19] p-5 shadow-2xl shadow-black/20">
-            <span class="block text-xs text-[#9da997]">Current execution</span>
-            <strong class="my-2.5 block text-base text-[#eef4e5]">Epoch <b id="epoch" class="text-xl text-lime-300">0</b></strong>
-            <small id="batch" class="block text-xs leading-snug text-[#9da997]">No active batch</small>
+          <article class="rounded-2xl border border-sky-100/15 bg-[#0d1d31]/90 p-5 shadow-2xl shadow-black/20">
+            <span class="block text-xs text-[#829ab3]">Rime</span>
+            <strong id="rime" class="my-2.5 block text-base text-[#e8f4ff]">Checking configuration</strong>
+            <small class="block text-xs leading-snug text-[#829ab3]">Server-side key status.</small>
           </article>
         </section>
 
-        <section class="grid gap-[18px] lg:grid-cols-[minmax(0,1.62fr)_minmax(330px,0.85fr)]">
-          <article class="min-h-[500px] rounded-2xl border border-lime-100/20 bg-[#1c2319]/90 p-5 shadow-2xl shadow-black/20 sm:p-7">
+        <section class="mt-4 grid gap-[18px] lg:grid-cols-[minmax(0,1.55fr)_minmax(300px,0.85fr)]">
+          <article class="rounded-2xl border border-sky-100/15 bg-[#0d1d31]/90 p-5 shadow-2xl shadow-black/20 sm:p-7">
             <div class="flex items-center justify-between gap-4">
               <div>
-                <p class="mb-2 text-[0.65rem] font-extrabold tracking-[0.17em] text-lime-300 uppercase">Live conversation</p>
-                <h2 class="text-lg font-bold tracking-tight text-[#f8f9f2]">Current turn</h2>
+                <p class="mb-2 text-[0.65rem] font-extrabold tracking-[0.17em] text-sky-300 uppercase">Live conversation</p>
+                <h2 class="text-lg font-bold tracking-tight text-[#f0f7ff]">Current turn</h2>
               </div>
-              <span id="audio-state" class="rounded-full border border-lime-300/40 bg-lime-300/10 px-2.5 py-1.5 text-xs text-lime-200" data-state="idle">Idle</span>
+              <span id="audio-state" class="rounded-full border border-sky-300/40 bg-sky-300/10 px-2.5 py-1.5 text-xs text-sky-200" data-state="idle">Idle</span>
             </div>
 
-            <div id="voice-orb" class="mx-auto my-[34px] grid size-[122px] place-items-center rounded-full border border-lime-300/35 bg-[radial-gradient(circle,#36571d_0%,#1d3019_48%,#172017_72%)] text-xs text-[#c9d5bd] uppercase shadow-[0_0_28px_rgba(202,255,77,0.18)]" data-state="idle" aria-label="Audio state">
-              <span class="size-[22px] rounded-full bg-lime-300 shadow-[0_0_28px_rgba(202,255,77,0.65)]"></span>
-              <span id="phase" class="-mt-8">Idle</span>
+            <div class="my-8 rounded-xl border border-sky-100/15 bg-[#071522] p-3">
+              <canvas id="voice-visualizer" class="h-36 w-full" aria-label="Microphone waveform"></canvas>
+              <div class="mt-2 flex items-center justify-between text-xs text-[#7891ab]"><span id="phase">Idle</span><span>Microphone signal</span></div>
             </div>
 
             <div class="grid gap-2.5 pb-[22px]" aria-live="polite">
-              <div class="border-l-2 border-lime-300 bg-black/15 px-3.5 py-3">
-                <span class="mb-1 block text-[0.65rem] font-extrabold tracking-[0.17em] text-lime-300 uppercase">User</span>
-                <p id="request-preview" class="m-0 text-sm leading-relaxed text-[#e6ebe0]">Change my delivery address to 42 Wallaby Way, Sydney.</p>
+              <div class="border-l-2 border-sky-300 bg-[#091827] px-3.5 py-3">
+                <span class="mb-1 block text-[0.65rem] font-extrabold tracking-[0.17em] text-sky-300 uppercase">You</span>
+                <p id="request-preview" class="m-0 text-sm leading-relaxed text-[#d8e7f5]">Your words will appear here.</p>
               </div>
-              <div class="border-l-2 border-cyan-300 bg-black/15 px-3.5 py-3">
-                <span class="mb-1 block text-[0.65rem] font-extrabold tracking-[0.17em] text-lime-300 uppercase">Assistant</span>
-                <p id="assistant-response" class="m-0 text-sm leading-relaxed text-[#e6ebe0]">Ready to check your address.</p>
+              <div class="border-l-2 border-indigo-300 bg-[#091827] px-3.5 py-3">
+                <span class="mb-1 block text-[0.65rem] font-extrabold tracking-[0.17em] text-indigo-300 uppercase">Assistant</span>
+                <p id="assistant-response" class="m-0 text-sm leading-relaxed text-[#d8e7f5]">Ready when you are.</p>
               </div>
-              <div id="interruption-note" class="rounded-lg border border-orange-300/35 bg-orange-950/30 px-3 py-2.5 text-sm text-orange-200" hidden></div>
+              <div id="interruption-note" class="rounded-lg border border-amber-300/35 bg-amber-950/30 px-3 py-2.5 text-sm text-amber-200" hidden></div>
             </div>
 
             <form id="address-form" class="mt-auto">
-              <label class="mb-2 block text-xs text-[#c4cebd]" for="address">Delivery address</label>
+              <label class="sr-only" for="address">Your words</label>
               <div class="flex gap-2.5 max-sm:flex-col">
-                <input id="address" class="min-w-0 flex-1 rounded-lg border border-lime-100/30 bg-[#121a11] px-3.5 py-3 text-[#f2f5ed] outline-none focus:border-lime-300 focus:ring-3 focus:ring-lime-300/10" name="address" autocomplete="street-address" value="42 Wallaby Way, Sydney" required />
-                <button class="rounded-lg bg-lime-300 px-4 py-3 font-extrabold text-lime-950 hover:bg-lime-200" type="submit">Start lookup</button>
+                <div class="relative min-w-0 flex-1">
+                  <span id="address-hint" class="pointer-events-none absolute inset-y-0 left-3.5 flex items-center text-sm text-[#7891ab]">Type or speak your words</span>
+                  <input id="address" class="relative z-10 w-full rounded-lg border border-sky-100/20 bg-transparent px-3.5 py-3 text-[#f1f7ff] outline-none focus:border-sky-300 focus:ring-3 focus:ring-sky-300/10" name="address" autocomplete="street-address" required />
+                </div>
+                <button class="rounded-lg bg-sky-300 px-4 py-3 font-extrabold text-[#061321] hover:bg-sky-200" type="submit">Send</button>
               </div>
             </form>
-            <button id="interrupt" class="mt-2.5 w-full rounded-lg bg-[#3c2620] px-4 py-3 font-extrabold text-orange-200 hover:bg-[#583126] disabled:cursor-not-allowed disabled:opacity-35" type="button">Interrupt current turn</button>
+            <button id="interrupt" class="mt-2.5 w-full rounded-lg border border-amber-300/35 bg-amber-300/10 px-4 py-3 font-extrabold text-amber-200 hover:bg-amber-300/15 disabled:cursor-not-allowed disabled:opacity-35" type="button">Interrupt current turn</button>
           </article>
 
           <aside>
-            <article class="rounded-2xl border border-lime-100/20 bg-[#1c2319]/90 p-5 shadow-2xl shadow-black/20 sm:p-7">
+            <article class="rounded-2xl border border-sky-100/15 bg-[#0d1d31]/90 p-5 shadow-2xl shadow-black/20 sm:p-7">
               <div class="flex items-center justify-between gap-4">
                 <div>
-                  <p class="mb-2 text-[0.65rem] font-extrabold tracking-[0.17em] text-lime-300 uppercase">Order state</p>
-                  <h2 class="text-lg font-bold tracking-tight text-[#f8f9f2]">Current order</h2>
+                  <p class="mb-2 text-[0.65rem] font-extrabold tracking-[0.17em] text-sky-300 uppercase">Order state</p>
+                  <h2 class="text-lg font-bold tracking-tight text-[#f0f7ff]">Current order</h2>
                 </div>
-                <span id="status" class="text-xs text-lime-300 capitalize">Idle</span>
+                <span id="status" class="text-xs text-sky-300 capitalize">Idle</span>
               </div>
-              <div class="border-b border-lime-100/20 py-7">
-                <span class="text-[0.65rem] font-extrabold tracking-[0.17em] text-lime-300 uppercase">Current address</span>
-                <strong id="order-address" class="mt-2 block text-xl leading-tight font-semibold tracking-tight text-[#f6f7ef]">123 Placeholder St, Springfield</strong>
+              <div class="border-b border-sky-100/15 py-7">
+                <span class="text-[0.65rem] font-extrabold tracking-[0.17em] text-sky-300 uppercase">Current address</span>
+                <strong id="order-address" class="mt-2 block text-xl leading-tight font-semibold tracking-tight text-[#eaf4ff]">No address confirmed</strong>
               </div>
               <div class="grid grid-cols-2 gap-4 pt-5">
-                <div><span class="block text-xs text-[#a2ad9c]">ETA</span><strong id="order-eta" class="mt-1 block text-sm font-medium text-[#dce5d5]">30 minutes</strong></div>
-                <div><span class="block text-xs text-[#a2ad9c]">Order status</span><strong id="order-status" class="mt-1 block text-sm font-medium text-[#dce5d5] capitalize">confirmed</strong></div>
+                <div><span class="block text-xs text-[#829ab3]">ETA</span><strong id="order-eta" class="mt-1 block text-sm font-medium text-[#d8e7f5]">-</strong></div>
+                <div><span class="block text-xs text-[#829ab3]">Order status</span><strong id="order-status" class="mt-1 block text-sm font-medium text-[#d8e7f5] capitalize">Waiting</strong></div>
               </div>
-              <p class="mb-0 mt-6 text-sm leading-relaxed text-[#b4cb9b]">A stale batch may finish late, but it cannot overwrite this order.</p>
+              <p class="mb-0 mt-6 text-sm leading-relaxed text-[#9fb4ca]">Only the latest request can update the order.</p>
             </article>
           </aside>
         </section>
 
-        <section class="mt-[18px] rounded-2xl border border-lime-100/20 bg-[#1c2319]/90 p-5 shadow-2xl shadow-black/20 sm:p-7">
+        <section class="mt-[18px] rounded-2xl border border-sky-100/15 bg-[#0d1d31]/90 p-5 shadow-2xl shadow-black/20 sm:p-7">
           <div class="flex items-center justify-between gap-4">
             <div>
-              <p class="mb-2 text-[0.65rem] font-extrabold tracking-[0.17em] text-lime-300 uppercase">Epoch event timeline</p>
-              <h2 class="text-lg font-bold tracking-tight text-[#f8f9f2]">Proof that stale work was fenced</h2>
+              <p class="mb-2 text-[0.65rem] font-extrabold tracking-[0.17em] text-sky-300 uppercase">Event logger</p>
+              <h2 class="text-lg font-bold tracking-tight text-[#f0f7ff]">What VoiceFence is doing</h2>
             </div>
-            <span class="text-xs text-[#9da997]">Newest first</span>
+            <span class="text-xs text-[#7891ab]">Newest first</span>
           </div>
           <ol id="events" class="mt-6 grid list-none p-0" aria-live="polite"></ol>
         </section>

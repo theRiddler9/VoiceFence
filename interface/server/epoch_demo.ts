@@ -33,9 +33,9 @@ export class InterfaceDemoSession {
   private status: InterfaceState["status"] = "idle";
   private events: InterfaceEvent[] = [];
   private order = {
-    address: "123 Placeholder St, Springfield",
-    etaMinutes: 30,
-    status: "confirmed",
+    address: "No address confirmed",
+    etaMinutes: 0,
+    status: "waiting",
   };
 
   constructor(
@@ -103,9 +103,9 @@ export class InterfaceDemoSession {
     this.status = "idle";
     this.events = [];
     this.order = {
-      address: "123 Placeholder St, Springfield",
-      etaMinutes: 30,
-      status: "confirmed",
+      address: "No address confirmed",
+      etaMinutes: 0,
+      status: "waiting",
     };
     return this.getState();
   }

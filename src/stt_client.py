@@ -12,6 +12,7 @@ class TranscriptEvent:
     text: str
     is_final: bool
     timestamp: float = field(default_factory=time.monotonic)
+    turn_id: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -82,7 +83,8 @@ class VoicePipeline:
         self._assistant_speaking = False
         self._user_speaking = False
         self._barge_in_emitted = False
-        self._last_address: Optional[str] = None
+        self._last_address_by_turn: dict[str, str] = {}
+        self._anonymous_turn = 0
         self._lock = threading.Lock()
 
     def set_assistant_speaking(self, speaking: bool) -> None:
@@ -95,6 +97,8 @@ class VoicePipeline:
         with self._lock:
             is_new_segment = not self._user_speaking
             self._user_speaking = True
+            if is_new_segment:
+                self._anonymous_turn += 1
             if is_new_segment and self._assistant_speaking and not self._barge_in_emitted:
                 self._barge_in_emitted = True
                 should_barge_in = True
@@ -107,7 +111,6 @@ class VoicePipeline:
         with self._lock:
             self._user_speaking = False
             self._barge_in_emitted = False
-            self._last_address = None
 
     def on_transcript(self, event: TranscriptEvent) -> None:
         intent = extract_address(event)
@@ -115,9 +118,10 @@ class VoicePipeline:
             return
 
         with self._lock:
-            if intent.address == self._last_address:
+            turn_key = event.turn_id or f"anonymous-{self._anonymous_turn}"
+            if intent.address == self._last_address_by_turn.get(turn_key):
                 return
-            self._last_address = intent.address
+            self._last_address_by_turn[turn_key] = intent.address
 
         self._on_address_intent(intent.address)
         self._emit("address-intent", event.timestamp, address=intent.address)

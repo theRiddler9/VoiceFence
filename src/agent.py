@@ -83,12 +83,19 @@ class LiveKitSessionSpeaker:
         blocking: bool = True,
     ) -> LiveKitPlayoutTask:
         """Schedule interruptible Rime playout on LiveKit's owning event loop."""
-        future = asyncio.run_coroutine_threadsafe(
-            self._play(text, batch_id),
-            self._loop,
-        )
         with self._playout_lock:
             self._pending_playouts += 1
+        playout = self._play(text, batch_id)
+        try:
+            future = asyncio.run_coroutine_threadsafe(
+                playout,
+                self._loop,
+            )
+        except BaseException:
+            playout.close()
+            with self._playout_lock:
+                self._pending_playouts -= 1
+            raise
         future.add_done_callback(self._playout_finished)
         task = LiveKitPlayoutTask(future)
         if blocking:

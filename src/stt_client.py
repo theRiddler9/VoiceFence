@@ -73,7 +73,6 @@ class VoicePipeline:
     """Route continuous-listening speech events to interruption and intent hooks."""
 
     MAX_TURN_DEDUP_ENTRIES = 32
-    MAX_ANONYMOUS_DEDUP_ENTRIES = 32
 
     def __init__(
         self,
@@ -88,8 +87,9 @@ class VoicePipeline:
         self._user_speaking = False
         self._barge_in_emitted = False
         self._last_address_by_turn: OrderedDict[str, str] = OrderedDict()
-        self._recent_anonymous_addresses: OrderedDict[str, None] = OrderedDict()
         self._anonymous_turn = 0
+        self._anonymous_last_address: Optional[str] = None
+        self._anonymous_interim_address: Optional[str] = None
         self._lock = threading.Lock()
 
     def set_assistant_speaking(self, speaking: bool) -> None:
@@ -104,6 +104,7 @@ class VoicePipeline:
             self._user_speaking = True
             if is_new_segment:
                 self._anonymous_turn += 1
+                self._anonymous_last_address = None
             if is_new_segment and self._assistant_speaking and not self._barge_in_emitted:
                 self._barge_in_emitted = True
                 should_barge_in = True
@@ -120,26 +121,39 @@ class VoicePipeline:
     def on_transcript(self, event: TranscriptEvent) -> None:
         intent = extract_address(event)
         if intent is None:
+            if event.turn_id is None:
+                with self._lock:
+                    self._anonymous_interim_address = None
             return
 
         with self._lock:
-            turn_key = (
-                f"item:{event.turn_id}"
-                if event.turn_id
-                else f"anonymous:{self._anonymous_turn}"
-            )
-            if intent.address == self._last_address_by_turn.get(turn_key):
-                self._last_address_by_turn.move_to_end(turn_key)
-                return
-            if (
-                event.turn_id is None
-                and intent.address in self._recent_anonymous_addresses
+            if event.turn_id is not None:
+                self._anonymous_interim_address = None
+                turn_key = f"item:{event.turn_id}"
+                if intent.address == self._last_address_by_turn.get(turn_key):
+                    self._last_address_by_turn.move_to_end(turn_key)
+                    return
+                self._remember_turn_address(turn_key, intent.address)
+            elif (
+                event.is_final
+                and intent.address == self._anonymous_interim_address
             ):
-                self._recent_anonymous_addresses.move_to_end(intent.address)
+                # LiveKit can deliver this final after VAD has ended and the
+                # next anonymous speech segment has begun.
+                self._anonymous_interim_address = None
                 return
-            self._remember_turn_address(turn_key, intent.address)
-            if event.turn_id is None:
-                self._remember_anonymous_address(intent.address)
+            elif intent.address == self._anonymous_last_address:
+                if not event.is_final and intent.address == self._anonymous_interim_address:
+                    return
+                if event.is_final:
+                    self._anonymous_interim_address = None
+                    return
+                self._anonymous_interim_address = intent.address
+            else:
+                self._anonymous_last_address = intent.address
+                self._anonymous_interim_address = (
+                    intent.address if not event.is_final else None
+                )
 
         self._on_address_intent(intent.address)
         self._emit("address-intent", event.timestamp, address=intent.address)
@@ -149,12 +163,6 @@ class VoicePipeline:
         self._last_address_by_turn.move_to_end(turn_key)
         while len(self._last_address_by_turn) > self.MAX_TURN_DEDUP_ENTRIES:
             self._last_address_by_turn.popitem(last=False)
-
-    def _remember_anonymous_address(self, address: str) -> None:
-        self._recent_anonymous_addresses[address] = None
-        self._recent_anonymous_addresses.move_to_end(address)
-        while len(self._recent_anonymous_addresses) > self.MAX_ANONYMOUS_DEDUP_ENTRIES:
-            self._recent_anonymous_addresses.popitem(last=False)
 
     def _emit(self, event: str, timestamp: float, **fields: Any) -> None:
         if self._event_sink is None:

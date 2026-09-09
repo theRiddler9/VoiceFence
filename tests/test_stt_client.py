@@ -154,6 +154,34 @@ def test_anonymous_late_final_stays_deduplicated_across_next_speech_start():
     assert addresses == ["221B Baker Street"]
 
 
+def test_anonymous_repeat_after_matching_final_in_a_later_segment_is_emitted():
+    """Catches session-wide anonymous dedup suppressing a legitimate repeat."""
+    addresses = []
+    pipeline = VoicePipeline(lambda: None, addresses.append)
+
+    pipeline.on_user_speech_started(timestamp=40.0)
+    pipeline.on_transcript(TranscriptEvent("make it 221B Baker Street", False, 40.1))
+    pipeline.on_transcript(TranscriptEvent("make it 221B Baker Street", True, 40.2))
+    pipeline.on_user_speech_ended(timestamp=40.3)
+    pipeline.on_user_speech_started(timestamp=40.4)
+    pipeline.on_transcript(TranscriptEvent("make it 221B Baker Street", True, 40.5))
+
+    assert addresses == ["221B Baker Street", "221B Baker Street"]
+
+
+def test_anonymous_corrections_can_return_to_a_previous_address_in_one_segment():
+    """Catches address-keyed dedup suppressing an A-to-B-to-A correction."""
+    addresses = []
+    pipeline = VoicePipeline(lambda: None, addresses.append)
+
+    pipeline.on_user_speech_started(timestamp=50.0)
+    pipeline.on_transcript(TranscriptEvent("make it 1 First Street", False, 50.1))
+    pipeline.on_transcript(TranscriptEvent("make it 10 Downing Street", False, 50.2))
+    pipeline.on_transcript(TranscriptEvent("make it 1 First Street", False, 50.3))
+
+    assert addresses == ["1 First Street", "10 Downing Street", "1 First Street"]
+
+
 def test_turn_dedup_cache_evicts_the_least_recent_turn_at_its_bound():
     """Catches unbounded item-id retention in a process that handles many calls."""
     addresses = []

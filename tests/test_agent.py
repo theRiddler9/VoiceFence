@@ -97,6 +97,33 @@ class PostPlayoutFailingSession:
         return PostPlayoutFailingHandle()
 
 
+class InterruptRecordingSession:
+    def __init__(self):
+        self.interrupt_calls = []
+
+    def interrupt(self, *, force):
+        self.interrupt_calls.append(force)
+
+
+class ControllableFuture:
+    def __init__(self):
+        self._callbacks = []
+
+    def add_done_callback(self, callback):
+        self._callbacks.append(callback)
+
+    def done(self):
+        return False
+
+    def result(self, timeout=None):
+        raise AssertionError("the scheduling-race test never joins this future")
+
+
+class InlineCallbackLoop:
+    def call_soon_threadsafe(self, callback):
+        callback()
+
+
 class FakeSTT:
     def __init__(self, **kwargs):
         self.options = kwargs
@@ -290,6 +317,57 @@ def test_livekit_session_speaker_crosses_worker_threads_and_tracks_playout():
         assert playout_task[0].is_alive() is False
 
     asyncio.run(exercise())
+
+
+def test_livekit_session_speaker_publishes_pending_playout_before_scheduling(monkeypatch):
+    """Catches a replacement interrupt that races before pending playout is visible."""
+    import src.agent as agent_module
+
+    session = InterruptRecordingSession()
+    loop = InlineCallbackLoop()
+    speaker = agent_module.LiveKitSessionSpeaker(
+        session,
+        loop=loop,
+        registry=BatchRegistry(),
+    )
+    future = ControllableFuture()
+
+    def schedule(coroutine, _loop):
+        coroutine.close()
+        speaker.interrupt()
+        return future
+
+    monkeypatch.setattr(agent_module.asyncio, "run_coroutine_threadsafe", schedule)
+    speaker.speak("confirmation", "batch-livekit", blocking=False)
+
+    assert session.interrupt_calls == [True]
+
+
+def test_livekit_session_speaker_rolls_back_pending_playout_when_scheduling_fails(monkeypatch):
+    """Catches a failed scheduler call that leaves later interruptions armed."""
+    import pytest
+
+    import src.agent as agent_module
+
+    session = InterruptRecordingSession()
+    speaker = agent_module.LiveKitSessionSpeaker(
+        session,
+        loop=InlineCallbackLoop(),
+        registry=BatchRegistry(),
+    )
+    scheduled_coroutines = []
+
+    def reject(coroutine, _loop):
+        scheduled_coroutines.append(coroutine)
+        raise RuntimeError("session loop is closed")
+
+    monkeypatch.setattr(agent_module.asyncio, "run_coroutine_threadsafe", reject)
+    with pytest.raises(RuntimeError, match="session loop is closed"):
+        speaker.speak("confirmation", "batch-livekit", blocking=False)
+
+    speaker.interrupt()
+    assert session.interrupt_calls == []
+    assert scheduled_coroutines[0].cr_frame is None
 
 
 def test_livekit_session_speaker_surfaces_playout_exceptions():

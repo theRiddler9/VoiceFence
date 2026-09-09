@@ -4,6 +4,10 @@ one lives in an environment variable — never hardcoded, never committed.
 """
 import os
 
+# --- Deepgram STT ------------------------------------------------------
+DEEPGRAM_MODEL = os.environ.get("DEEPGRAM_MODEL", "nova-3")
+DEEPGRAM_LANGUAGE = os.environ.get("DEEPGRAM_LANGUAGE", "en")
+
 # --- Rime TTS ---------------------------------------------------------
 RIME_API_KEY = os.environ.get("RIME_API_KEY", "")
 RIME_TTS_URL = "https://users.rime.ai/v1/rime-tts"

@@ -8,6 +8,8 @@ type EventRecord = {
   reason?: string;
   source?: string;
   purpose?: string;
+  address?: string;
+  transcript?: string;
 };
 
 type InterfaceState = {
@@ -28,6 +30,7 @@ const $ = <T extends HTMLElement>(id: string): T => {
 };
 
 const connection = $("connection");
+const runtimeMode = $("runtime-mode");
 const epoch = $("epoch");
 const status = $("status");
 const rime = $("rime");
@@ -83,12 +86,17 @@ function getAssistantResponse(state: InterfaceState): string {
   return "Ready when you are.";
 }
 
+function getLatestAddressEvent(state: InterfaceState): EventRecord | undefined {
+  return [...state.events].reverse().find((item) => item.event === "address-intent");
+}
+
 function addEventRow(item: EventRecord): HTMLLIElement {
   const row = document.createElement("li");
   const time = document.createElement("time");
   const name = document.createElement("strong");
   const detail = document.createElement("span");
   const extras = [item.reason, item.source, item.purpose].filter(Boolean).join(" / ");
+  const payload = item.address || item.transcript;
 
   row.className = "grid grid-cols-[95px_185px_1fr] items-center gap-3 border-t border-sky-100/15 py-3 text-xs max-sm:grid-cols-1 max-sm:gap-1";
   time.className = "text-[#7891ab]";
@@ -96,16 +104,21 @@ function addEventRow(item: EventRecord): HTMLLIElement {
   detail.className = "text-[#7891ab]";
   time.textContent = new Date(item.timestamp).toLocaleTimeString();
   name.textContent = item.event;
-  detail.textContent = `${item.batchId || "no batch"} · epoch ${item.epoch}${extras ? ` · ${extras}` : ""}`;
+  detail.textContent = `${item.batchId || "no batch"} · epoch ${item.epoch ?? "-"}${extras ? ` · ${extras}` : ""}${payload ? ` · ${payload}` : ""}`;
   row.append(time, name, detail);
   return row;
 }
 
 function render(state: InterfaceState): void {
   const currentAudioState = getAudioState(state);
-  const recentInterruption = [...state.events].reverse().find((item) => item.event === "barge-in");
+  const recentInterruption = [...state.events].reverse().find((item) => item.event === "barge-in-detected" || item.event === "barge-in");
+  const latestAddress = getLatestAddressEvent(state);
 
-  connection.textContent = "API connected";
+  connection.textContent = state.source === "live" ? "Live backend connected" : "Demo backend";
+  runtimeMode.textContent = state.source === "live" ? "Live mode" : "Demo mode";
+  runtimeMode.className = state.source === "live"
+    ? "rounded-full border border-emerald-300/40 bg-emerald-300/10 px-2.5 py-1 text-emerald-200"
+    : "rounded-full border border-sky-100/20 px-2.5 py-1 text-[#7891ab]";
   connection.textContent = state.source === "live" ? "Live backend connected" : "Demo backend";
   epoch.textContent = String(state.currentEpoch);
   batch.textContent = state.activeBatchId ?? "No active batch";
@@ -128,7 +141,9 @@ function render(state: InterfaceState): void {
   orderStatus.textContent = state.order.status;
   interruptButton.disabled = state.source === "live" || !state.activeBatchId;
   addressInput.disabled = state.source === "live";
-  requestPreview.textContent = addressInput.value || "Your words will appear here.";
+  requestPreview.textContent = state.source === "live"
+    ? latestAddress?.address || latestAddress?.transcript || "Listening for an address request..."
+    : addressInput.value || "Your words will appear here.";
   addressHint.hidden = Boolean(addressInput.value);
 
   events.replaceChildren(...state.events.slice(-10).reverse().map(addEventRow));
@@ -139,6 +154,7 @@ async function refresh(): Promise<void> {
     render(await request<InterfaceState>("/api/state"));
   } catch (error) {
     connection.textContent = "API offline";
+    runtimeMode.textContent = "Offline";
     console.error(error);
   }
 }

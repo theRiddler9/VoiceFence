@@ -99,6 +99,30 @@ class ExpiredWaitGate:
         return None
 
 
+class CommitRaceStore:
+    """Try to commit precisely after timeout claims the turn."""
+
+    def __init__(self, registry):
+        self.registry = registry
+        self.started = threading.Event()
+        self.try_commit = threading.Event()
+        self.committed = threading.Event()
+
+    def update_address(self, new_address, batch_id):
+        self.started.set()
+        assert self.try_commit.wait(1)
+
+        def commit():
+            self.committed.set()
+
+        active = self.registry.run_if_active(batch_id, commit)
+        return LookupResult(
+            batch_id,
+            "completed" if active else "cancelled",
+            {"address": new_address} if active else None,
+        )
+
+
 def test_epochs_are_monotonic_and_interrupt_cancels_active_batch():
     registry = BatchRegistry()
     store = ControlledStore(registry)
@@ -182,6 +206,53 @@ def test_timeout_speaks_explicit_failure_and_drops_late_tool_result():
     assert [text for text, _ in speaker.calls] == [
         "I couldn't confirm that address. Can you repeat it?"
     ]
+
+
+def test_timeout_claim_atomically_prevents_a_store_commit():
+    registry = BatchRegistry()
+    store = CommitRaceStore(registry)
+    speaker = RecordingSpeaker(registry)
+    gate = TimeoutEventGate()
+    orchestrator = EpochOrchestrator(
+        registry,
+        store,
+        speaker,
+        tool_timeout_seconds=0.01,
+        event_sink=gate,
+    )
+
+    handle = orchestrator.start_address_update("Race Address")
+    assert store.started.wait(1)
+    assert gate.timeout_emitted.wait(1)
+    store.try_commit.set()
+    gate.release_timeout.set()
+
+    assert handle.join(1).status == "timeout"
+    assert store.committed.is_set() is False
+
+
+def test_timeout_result_is_not_published_before_failure_tts_is_scheduled():
+    registry = BatchRegistry()
+    store = NeverEndingStore(registry)
+    speaker = RecordingSpeaker(registry)
+    gate = TimeoutEventGate()
+    orchestrator = EpochOrchestrator(
+        registry,
+        store,
+        speaker,
+        tool_timeout_seconds=0.01,
+        event_sink=gate,
+    )
+
+    handle = orchestrator.start_address_update("Slow Address")
+    assert gate.timeout_emitted.wait(1)
+    assert handle.join(0.01) is None
+    assert handle.wait_for_tts(0.01) is False
+
+    gate.release_timeout.set()
+    assert handle.join(1).status == "timeout"
+    assert handle.wait_for_tts(1) is True
+    assert speaker.calls
 
 
 def test_old_timeout_watcher_cannot_cancel_a_newer_epoch():

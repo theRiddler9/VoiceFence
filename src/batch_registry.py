@@ -55,6 +55,20 @@ class BatchRegistry:
             operation()
             return True
 
+    def cancel_if_active(
+        self,
+        batch_id: str,
+        operation: Callable[[], bool],
+    ) -> bool:
+        """Run ``operation`` and cancel the batch at one linearization point."""
+        with self._lock:
+            if batch_id in self._cancelled:
+                return False
+            if not operation():
+                return False
+            self._cancelled.add(batch_id)
+            return True
+
     def clear(self, batch_id: str) -> None:
         """Remove a cancelled batch after all work has stopped."""
         with self._lock:

@@ -11,6 +11,9 @@ export type LiveInterfaceEvent = {
   order?: { address: string; eta_minutes?: number; status?: string };
   address?: string;
   livekit_connected?: boolean;
+  transcript?: string;
+  is_final?: boolean;
+  turn_id?: string;
 };
 
 export type LiveInterfaceState = {
@@ -23,6 +26,7 @@ export type LiveInterfaceState = {
   phase: "idle" | "lookup" | "speaking";
   rimeConfigured: boolean;
   order: { address: string; etaMinutes: number; status: string };
+  latestTranscript: string | null;
   events: LiveInterfaceEvent[];
 };
 
@@ -42,6 +46,7 @@ export class LiveEventStore {
     let status: LiveInterfaceState["status"] = "idle";
     let phase: LiveInterfaceState["phase"] = "idle";
     let livekitConnected = false;
+    let latestTranscript: string | null = null;
     let order = {
       address: "No address confirmed",
       etaMinutes: 0,
@@ -50,7 +55,9 @@ export class LiveEventStore {
 
     for (const event of events) {
       currentEpoch = Math.max(currentEpoch, event.epoch ?? 0);
-      if (event.event === "runtime-status") {
+      if (event.event === "transcript") {
+        latestTranscript = event.transcript ?? null;
+      } else if (event.event === "runtime-status") {
         livekitConnected = event.livekit_connected === true;
       } else if (event.event === "epoch-started") {
         activeBatchId = event.batch_id ?? null;
@@ -92,6 +99,7 @@ export class LiveEventStore {
       phase,
       rimeConfigured: this.rimeConfigured,
       order,
+      latestTranscript,
       events: events.slice(-60),
     };
   }

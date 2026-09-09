@@ -22,6 +22,7 @@ type InterfaceState = {
   phase: string;
   rimeConfigured: boolean;
   order: { address: string; etaMinutes: number; status: string };
+  latestTranscript: string | null;
   events: EventRecord[];
 };
 
@@ -80,6 +81,15 @@ function getAudioState(state: InterfaceState): string {
 }
 
 function getAssistantResponse(state: InterfaceState): string {
+  const latestAddress = getLatestAddressEvent(state);
+  const latestEvent = state.events.at(-1);
+  const hasUnmatchedTranscript = Boolean(
+    state.latestTranscript &&
+    (!latestAddress || latestAddress.timestamp < (latestEvent?.timestamp ?? 0)),
+  );
+  if (state.source === "live" && hasUnmatchedTranscript) {
+    return "I heard you. Please include the delivery address so I can update it.";
+  }
   if (state.status === "lookup-pending") return "I am checking that request...";
   if (state.status === "speaking") return "The current address was confirmed. Rime is speaking the result.";
   if (state.status === "interrupted") return "I stopped the previous request.";
@@ -147,7 +157,7 @@ function render(state: InterfaceState): void {
   interruptButton.disabled = state.source === "live" || !state.activeBatchId;
   addressInput.disabled = state.source === "live";
   requestPreview.textContent = state.source === "live"
-    ? latestAddress?.address || latestAddress?.transcript || "Listening for an address request..."
+    ? state.latestTranscript || latestAddress?.address || latestAddress?.transcript || "Listening for an address request..."
     : addressInput.value || "Your words will appear here.";
 
   events.replaceChildren(...state.events.slice(-10).reverse().map(addEventRow));

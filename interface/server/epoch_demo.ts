@@ -18,6 +18,7 @@ export type InterfaceState = {
   phase: "idle" | "lookup" | "speaking";
   rimeConfigured: boolean;
   order: { address: string; etaMinutes: number; status: string };
+  latestTranscript: string | null;
   events: InterfaceEvent[];
 };
 
@@ -57,6 +58,7 @@ export class InterfaceDemoSession {
       phase: this.active?.phase ?? "idle",
       rimeConfigured: this.rimeConfigured,
       order: { ...this.order },
+      latestTranscript: null,
       events: this.events.slice(-60),
     };
   }

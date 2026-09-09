@@ -138,6 +138,13 @@ class VoicePipeline:
 
         intent = extract_address(event)
         if intent is None:
+            self._emit(
+                "transcript",
+                event.timestamp,
+                transcript=event.text,
+                is_final=event.is_final,
+                turn_id=event.turn_id,
+            )
             if event.turn_id is None:
                 with self._lock:
                     self._anonymous_interim_address_key = None
@@ -217,6 +224,13 @@ class VoicePipeline:
                         address_key if not event.is_final else None
                     )
 
+            self._emit(
+                "transcript",
+                event.timestamp,
+                transcript=event.text,
+                is_final=event.is_final,
+                turn_id=event.turn_id,
+            )
             self._emit("address-intent", event.timestamp, address=intent.address)
 
     def _remember_turn_address(self, turn_key: str, address: str) -> None:

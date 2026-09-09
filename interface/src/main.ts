@@ -11,6 +11,7 @@ type EventRecord = {
 };
 
 type InterfaceState = {
+  source: "demo" | "live";
   currentEpoch: number;
   activeBatchId: string | null;
   status: string;
@@ -105,6 +106,7 @@ function render(state: InterfaceState): void {
   const recentInterruption = [...state.events].reverse().find((item) => item.event === "barge-in");
 
   connection.textContent = "API connected";
+  connection.textContent = state.source === "live" ? "Live backend connected" : "Demo backend";
   epoch.textContent = String(state.currentEpoch);
   batch.textContent = state.activeBatchId ?? "No active batch";
   rime.textContent = state.rimeConfigured ? "Configured" : "Key missing";
@@ -124,7 +126,8 @@ function render(state: InterfaceState): void {
   orderAddress.textContent = state.order.address;
   orderEta.textContent = `${state.order.etaMinutes} minutes`;
   orderStatus.textContent = state.order.status;
-  interruptButton.disabled = !state.activeBatchId;
+  interruptButton.disabled = state.source === "live" || !state.activeBatchId;
+  addressInput.disabled = state.source === "live";
   requestPreview.textContent = addressInput.value || "Your words will appear here.";
   addressHint.hidden = Boolean(addressInput.value);
 

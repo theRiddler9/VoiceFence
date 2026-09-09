@@ -296,6 +296,7 @@ class EpochOrchestrator:
         with self._lock:
             if self._active_context == context:
                 self._state.active_tts_task = tts_task
+        self._emit("tool-completed", context, order=lookup.order)
         self._emit("tts-started", context)
         handle._set_result(OrchestratorResult(context, "completed", lookup.order))
         self._clear_tool_if_current(context)

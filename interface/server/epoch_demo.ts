@@ -9,6 +9,7 @@ export type InterfaceEvent = {
 };
 
 export type InterfaceState = {
+  source: "demo";
   currentEpoch: number;
   activeBatchId: string | null;
   status: "idle" | "lookup-pending" | "speaking" | "interrupted" | "completed" | "stale-dropped";
@@ -45,6 +46,7 @@ export class InterfaceDemoSession {
 
   getState(): InterfaceState {
     return {
+      source: "demo",
       currentEpoch: this.epoch,
       activeBatchId: this.active?.batchId ?? null,
       status: this.status,

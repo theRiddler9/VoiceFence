@@ -17,6 +17,7 @@ from typing import Any, Optional, Protocol
 
 from . import config
 from .batch_registry import BatchRegistry
+from .interface_bridge import RuntimeEventBridge
 from .orchestrator import EpochOrchestrator
 from .order_store import OrderStore
 from .stt_client import EventSink, TranscriptEvent, VoicePipeline
@@ -262,6 +263,7 @@ async def entrypoint(ctx: Any) -> None:
 
     registry = BatchRegistry()
     store = OrderStore(registry)
+    event_bridge = RuntimeEventBridge.from_environment()
 
     session = agents.AgentSession(
         stt=deepgram.STT(
@@ -285,8 +287,16 @@ async def entrypoint(ctx: Any) -> None:
         loop=asyncio.get_running_loop(),
         registry=registry,
     )
-    orchestrator = EpochOrchestrator(registry, store, speaker)
-    pipeline = build_voice_pipeline(LiveKitBargeInBridge(orchestrator, speaker))
+    orchestrator = EpochOrchestrator(
+        registry,
+        store,
+        speaker,
+        event_sink=event_bridge,
+    )
+    pipeline = build_voice_pipeline(
+        LiveKitBargeInBridge(orchestrator, speaker),
+        event_sink=event_bridge,
+    )
     session.on(
         "user_input_transcribed",
         lambda event: handle_transcript_event(pipeline, event),

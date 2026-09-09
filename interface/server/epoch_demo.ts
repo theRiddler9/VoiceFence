@@ -10,6 +10,7 @@ export type InterfaceEvent = {
 
 export type InterfaceState = {
   source: "demo";
+  livekitConfigured: boolean;
   currentEpoch: number;
   activeBatchId: string | null;
   status: "idle" | "lookup-pending" | "speaking" | "interrupted" | "completed" | "stale-dropped";
@@ -47,6 +48,7 @@ export class InterfaceDemoSession {
   getState(): InterfaceState {
     return {
       source: "demo",
+      livekitConfigured: Boolean(process.env.LIVEKIT_URL && process.env.LIVEKIT_API_KEY && process.env.LIVEKIT_API_SECRET),
       currentEpoch: this.epoch,
       activeBatchId: this.active?.batchId ?? null,
       status: this.status,

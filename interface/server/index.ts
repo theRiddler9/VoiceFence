@@ -14,6 +14,7 @@ const session = new InterfaceDemoSession(delayMs);
 const liveEvents = new LiveEventStore(
   process.env.VOICEFENCE_EVENT_LOG ?? ".voicefence/live_events.jsonl",
   Boolean(process.env.RIME_API_KEY),
+  Boolean(process.env.LIVEKIT_URL && process.env.LIVEKIT_API_KEY && process.env.LIVEKIT_API_SECRET),
 );
 const vite = await createViteServer({
   root: interfaceRoot,

@@ -14,6 +14,7 @@ type EventRecord = {
 
 type InterfaceState = {
   source: "demo" | "live";
+  livekitConfigured: boolean;
   currentEpoch: number;
   activeBatchId: string | null;
   status: string;
@@ -33,6 +34,7 @@ const connection = $("connection");
 const runtimeMode = $("runtime-mode");
 const epoch = $("epoch");
 const status = $("status");
+const livekit = $("livekit");
 const rime = $("rime");
 const batch = $("batch");
 const phase = $("phase");
@@ -50,6 +52,7 @@ const addressForm = $("address-form") as HTMLFormElement;
 const interruptButton = $("interrupt") as HTMLButtonElement;
 const microphoneToggle = $("microphone-toggle") as HTMLButtonElement;
 const microphoneStatus = $("microphone");
+const microphoneMessage = $("microphone-message");
 const addressHint = $("address-hint");
 const visualizer = $("voice-visualizer") as HTMLCanvasElement;
 let microphoneStream: MediaStream | null = null;
@@ -122,6 +125,7 @@ function render(state: InterfaceState): void {
   connection.textContent = state.source === "live" ? "Live backend connected" : "Demo backend";
   epoch.textContent = String(state.currentEpoch);
   batch.textContent = state.activeBatchId ?? "No active batch";
+  livekit.textContent = state.livekitConfigured ? "Configured" : "Credentials missing";
   rime.textContent = state.rimeConfigured ? "Configured" : "Key missing";
   rime.classList.toggle("is-ready", state.rimeConfigured);
   status.textContent = displayStatus(state.status);
@@ -212,10 +216,14 @@ async function toggleMicrophone(): Promise<void> {
     cancelAnimationFrame(animationFrame);
     microphoneStatus.textContent = "Off";
     microphoneToggle.textContent = "Start microphone";
+    microphoneMessage.textContent = "Browser microphone is off.";
     return;
   }
 
   try {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error("Microphone access requires HTTPS or localhost.");
+    }
     microphoneStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     audioContext = new AudioContext();
     const analyser = audioContext.createAnalyser();
@@ -223,9 +231,11 @@ async function toggleMicrophone(): Promise<void> {
     audioContext.createMediaStreamSource(microphoneStream).connect(analyser);
     microphoneStatus.textContent = "Listening";
     microphoneToggle.textContent = "Stop microphone";
+    microphoneMessage.textContent = "Microphone signal is being visualized locally.";
     drawVisualizer(analyser);
   } catch (error) {
     microphoneStatus.textContent = "Permission needed";
+    microphoneMessage.textContent = error instanceof Error ? error.message : "Microphone access failed.";
     console.error(error);
   }
 }

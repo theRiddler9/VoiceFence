@@ -14,6 +14,7 @@ export type LiveInterfaceEvent = {
 
 export type LiveInterfaceState = {
   source: "live";
+  livekitConfigured: boolean;
   currentEpoch: number;
   activeBatchId: string | null;
   status: "idle" | "lookup-pending" | "speaking" | "interrupted" | "completed" | "stale-dropped";
@@ -27,6 +28,7 @@ export class LiveEventStore {
   constructor(
     private readonly path: string,
     private readonly rimeConfigured: boolean,
+    private readonly livekitConfigured = false,
   ) {}
 
   getState(): LiveInterfaceState | null {
@@ -77,6 +79,7 @@ export class LiveEventStore {
 
     return {
       source: "live",
+      livekitConfigured: this.livekitConfigured,
       currentEpoch,
       activeBatchId,
       status,

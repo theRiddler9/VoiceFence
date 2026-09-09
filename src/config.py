@@ -3,6 +3,12 @@ Central config. Nothing in here is a secret except RIME_API_KEY, and that
 one lives in an environment variable — never hardcoded, never committed.
 """
 import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 # --- Deepgram STT ------------------------------------------------------
 DEEPGRAM_MODEL = os.environ.get("DEEPGRAM_MODEL", "nova-3")

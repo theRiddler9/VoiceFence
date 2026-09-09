@@ -1,10 +1,8 @@
 """
-Standalone demo/smoke test. Stands in for Person A's orchestrator to show
-that both components honor a cancel mid-flight.
+Standalone demo/smoke test for the Epoch orchestrator.
 
 Scenario, matching the customer-service phone analogy in the spec:
-  1. Orchestrator says "look up address #1" under batch-1, and starts
-     speaking a confirmation under batch-1.
+  1. Orchestrator starts a delayed lookup for address #1.
   2. Midway through, the person says "actually, make it address #2".
      Orchestrator cancels batch-1 and starts fresh work under batch-2:
      a new lookup and a new spoken confirmation.

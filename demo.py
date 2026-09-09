@@ -1,11 +1,12 @@
 """
-Standalone demo/smoke test for the Epoch orchestrator.
+Standalone demo/smoke test for the interruption scenario.
 
 Scenario, matching the customer-service phone analogy in the spec:
-  1. Orchestrator starts a delayed lookup for address #1.
+  1. A person's address-change request kicks off a delayed lookup AND a
+     spoken confirmation together, both tagged with the same batch id.
   2. Midway through, the person says "actually, make it address #2".
-     Orchestrator cancels batch-1 and starts fresh work under batch-2:
-     a new lookup and a new spoken confirmation.
+     The batch is cancelled; a fresh batch id is minted for the
+     corrected lookup + spoken confirmation.
   3. batch-1's lookup and speech should both come back "cancelled" and
      never be applied. batch-2 should complete normally, on both legs.
 
@@ -14,6 +15,14 @@ Run with: python demo.py
 actually call Rime. Runs fine without it too — the order-store half of
 the demo doesn't touch the network, and the speech legs will just report
 an "error" status for the missing key instead of crashing the demo.)
+
+This is deliberately its own small orchestration — lookup and speech run
+concurrently from the moment a turn starts, exactly like the real phone
+call: the confirmation begins speaking while the lookup is still in
+flight, so an interrupt has to race and cancel *both* legs independently.
+(Contrast this with src/orchestrator.py's EpochOrchestrator, which
+sequences speech to start only after its lookup completes — a valid,
+different design, but not what this demo/test exercises.)
 
 The orchestration logic lives in run_interruption_demo() so it can be
 exercised directly by tests (see tests/test_demo_orchestrator.py) with
@@ -56,15 +65,14 @@ def run_interruption_demo(
     log: Optional[Callable[[str], None]] = None,
 ) -> DemoRunResult:
     """The actual orchestration logic: stamp batch_1, run a lookup +
-    speech confirmation, interrupt mid-flight, stamp batch_2, run the
-    corrected lookup + confirmation.
+    speech confirmation concurrently, interrupt mid-flight, stamp
+    batch_2, run the corrected lookup + confirmation.
 
     `speaker_factory` is a zero-arg callable returning a RimeSpeaker —
     a factory rather than a single shared instance so tests can hand
-    back a fresh fake session/sink per call if they want to, the same
-    way the real orchestrator would construct one per turn (or reuse a
-    long-lived one; either works since RimeSpeaker itself holds no
-    per-call state).
+    back a fresh fake session/sink per call, the same way each turn in
+    a real call would get a fresh TTS stream. It's called once per
+    batch (twice total per run).
 
     `log`, if given, is called with a short human-readable string at
     each notable step — this is intentionally decoupled from
@@ -158,7 +166,7 @@ def main():
         return RimeSpeaker(registry)
 
     def log(msg: str) -> None:
-        print(f"[orchestrator] {msg}")
+        print(f"[demo] {msg}")
 
     result = run_interruption_demo(registry, store, make_speaker, log=log)
 

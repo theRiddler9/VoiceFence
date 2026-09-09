@@ -1,303 +1,258 @@
-<<<<<<< HEAD
-# State-Fenced Voice Concierge
+# VoiceFence
 
-A voice assistant that stays *correct*, not just responsive, when a user interrupts it mid-action.
+VoiceFence is a voice-native delivery assistant that stays correct when a
+user interrupts an in-progress request.
 
-Most voice-agent demos stop at "the assistant can be interrupted." This one proves something harder: when a user interrupts a slow backend lookup (e.g. an address validation that takes 2–5 seconds) with a correction, the system never speaks or saves the stale result. Interruption handling and async-result staleness are fenced by the same mechanism — a conversational epoch counter — rather than two separate hacks bolted together.
+The product focuses on a realistic voice failure: a slow address lookup is
+still running when the user changes the request. VoiceFence stops outdated
+speech and fences the old lookup result so it cannot overwrite the order or
+be spoken as the current answer.
 
-Built for [hackathon name] using Rime as the primary voice output.
+## Why Voice Matters
 
----
+Voice creates the failure mode. A person can interrupt while the assistant is
+speaking or while a backend tool is still running. A text-only workflow would
+usually serialize these actions and hide the race.
 
-## The problem, in one line
+The demo represents a hands-busy delivery workflow:
 
-Backend lookups take time. Speech doesn't wait. When those two facts collide — a user corrects themselves *while* a lookup from their first request is still in flight — naive voice agents either talk over the correction or quietly commit the outdated result. This project fixes that at the architecture level, not with a prompt.
+1. The user asks to change a delivery address.
+2. The backend performs a deliberately delayed lookup.
+3. The user interrupts with a corrected address.
+4. The first epoch is invalidated.
+5. The late result from the first request is dropped.
+6. Only the corrected address is stored and confirmed.
 
-## Demo scenario
+## Voice Engineering Problem
 
-1. User: *"Change my delivery address to 42 Wallaby Way, Sydney."*
-2. Backend starts validating the address (artificially delayed 2–5s to simulate a real lookup).
-3. At ~1 second in, user interrupts: *"Wait — actually make it 221B Baker Street, London."*
-4. **Expected system behavior:**
-   - Any audio already playing for the first address stops within milliseconds.
-   - The first lookup's result, whenever it eventually arrives, is discarded — never spoken, never written to the order.
-   - The system processes the correction cleanly and confirms only the new address.
-   - If a lookup times out instead of resolving, the system says so explicitly ("I couldn't confirm that address, can you repeat it?") rather than guessing.
+VoiceFence solves interruption and recovery with epoch fencing.
 
-## How it works
+Every tool call and speech request receives a monotonically increasing epoch
+and a unique batch ID. When the user interrupts, the active batch is cancelled
+and the epoch advances. A result is usable only when its epoch and batch are
+still current.
 
-Every unit of work — a Rime audio stream, a backend lookup — is tagged with a monotonically increasing **epoch** at the moment it starts. When the user interrupts, the epoch increments immediately, and anything still in flight from the old epoch is discarded the moment it tries to reach the speaker or the data store. This is optimistic-concurrency control applied to voice orchestration.
+This prevents two stale-result failures:
 
+- Outdated Rime audio continues after the user changes the request.
+- A delayed backend result overwrites the newer order state.
+
+## Architecture
+
+```text
+User microphone
+      |
+      v
+LiveKit voice pipeline
+  VAD, turn detection, STT, barge-in
+      |
+      v
+EpochOrchestrator
+  epoch state, cancellation, timeout, stale-result fencing
+      |                         |
+      v                         v
+OrderStore                  RimeSpeaker
+delayed mock lookup         streaming PCM playback
+      |                         |
+      +------------+------------+
+                   v
+             Current response
 ```
-User (mic)
-   ↓
-LiveKit Agent  — VAD, turn detection, barge-in signal
-   ↓
-Orchestrator   — epoch counter, cancellation tokens, turn state
-   ↓                         ↘
-Tool/State layer              (epoch-tagged async calls,
-(in-memory mock order store)   dropped if epoch stale)
-   ↓
-Rime TTS (epoch-tagged, killable stream)
-   ↓
-Audio out
-```
 
-## What we measure (not claim)
+The current Python implementation exposes the integration hooks
+`on_barge_in()` and `on_address_intent(address)`. LiveKit and speech-to-text
+integration are owned by the voice-pipeline work and are not duplicated in
+the web interface.
 
-| Metric | Target |
-|---|---|
-| Barge-in → silence latency | Sub-few-hundred-ms |
-| Stale-data leak rate (audio spoken or order written from a cancelled epoch) | 0, across repeated trials |
-| End-to-end perceived latency for a corrected turn | Logged per run |
-| Failure-path correctness (timeout → explicit "couldn't confirm," never a guess) | 100% of timeout trials |
+## Repository Layout
 
-All numbers in `RIME_EVIDENCE.md` are generated by `scripts/run_acceptance_test.sh` from real logged runs — not hand-written.
-
----
-
-## Repo layout
-
-```
-rime-hackathon/
-├── README.md                   # this file
-├── RIME_EVIDENCE.md            # measured results, generated from real test runs
+```text
+VoiceFence/
+├── README.md
 ├── .env.example
 ├── .gitignore
-├── pyproject.toml / package.json
-│
+├── requirements.txt
+├── demo.py
 ├── src/
-│   ├── agent.py                 # LiveKit agent entrypoint, VAD/turn wiring        [Voice Pipeline]
-│   ├── orchestrator.py          # epoch counter, cancellation, turn state machine  [Orchestrator]
-│   ├── batch_registry.py        # shared "is this epoch/batch cancelled?" registry [Orchestrator]
-│   ├── tools/
-│   │   └── order_store.py       # mock in-memory order/address backend            [TTS & Tools]
-│   ├── tts/
-│   │   └── rime_client.py       # epoch-tagged Rime streaming wrapper             [TTS & Tools]
-│   ├── stt/
-│   │   └── stt_client.py        # streaming transcript adapter                    [Voice Pipeline]
-│   └── config.py                # model/voice/endpoint config, no secrets         [TTS & Tools]
-│
+│   ├── batch_registry.py
+│   ├── config.py
+│   ├── orchestrator.py
+│   ├── order_store.py
+│   └── rime_speaker.py
 ├── tests/
-│   ├── test_epoch_fencing.py    # unit: stale results dropped                     [Evidence & Test]
-│   ├── fixtures/
-│   │   └── delayed_lookup.py    # injects artificial tool delay                   [Evidence & Test]
-│   └── acceptance_test.py       # scripted interrupt scenario, repeatable         [Evidence & Test]
-│
-├── scripts/
-│   └── run_acceptance_test.sh   # one command → runs + logs measured latencies    [Evidence & Test]
-│
-└── docs/
-    ├── architecture.md
-    └── known_limitations.md
+│   ├── test_batch_registry.py
+│   ├── test_order_store.py
+│   ├── test_orchestrator.py
+│   └── test_rime_speaker.py
+└── interface/
+    ├── index.html
+    ├── package.json
+    ├── server/
+    │   ├── epoch_demo.test.ts
+    │   ├── epoch_demo.ts
+    │   └── index.ts
+    └── src/
+        ├── main.ts
+        └── tailwind.css
 ```
 
-## Team & ownership
+## Rime Configuration
 
-| Person | Role | Owns |
-|---|---|---|
-| **A** | Orchestrator / Epoch Lead | `orchestrator.py`, `batch_registry.py` — the epoch counter, cancellation logic, timeout/failure path |
-| **B** | Voice Pipeline Lead | `agent.py`, `stt_client.py` — LiveKit room join, VAD, barge-in detection, transcript-to-intent |
-| **C** | TTS & Tools Lead | `rime_client.py`, `order_store.py`, `config.py` — Rime streaming (killable mid-stream), mock backend (adjustable artificial delay) |
-| **D** | Evidence & Test Lead | `tests/`, `scripts/run_acceptance_test.sh`, `RIME_EVIDENCE.md` — repeatable acceptance test, structured logging, honest reporting |
+Rime is the primary spoken output. The current Python path uses:
 
-See `docs/architecture.md` for the full build-order rationale and the epoch-fencing design in depth.
+| Setting | Value |
+|---|---|
+| Model ID | `mistv2` |
+| Speaker | `astra` |
+| Language | `eng` |
+| Endpoint | `https://users.rime.ai/v1/rime-tts` |
+| Audio format | Headerless 16-bit little-endian PCM |
+| Sampling rate | `16000` Hz |
+| Speed alpha | `1.0` |
+| Transport | HTTP `POST` with streamed PCM response |
 
----
-=======
-# Joy — TTS & Tools
-
-The "mouth" (Rime TTS) and the "backend" (a mock order lookup) for the
-assistant demo. Both can be killed mid-action the instant the
-orchestrator says a batch is outdated.
->>>>>>> 49aedca6607b3d6f872bf14bb11786d3ce4ffaa0
+The API key is loaded from the `RIME_API_KEY` environment variable. It is
+never committed, included in the frontend, or exposed by the interface API.
 
 ## Setup
 
-```bash
-<<<<<<< HEAD
-git clone <repo-url>
-cd rime-hackathon
-python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env   # fill in RIME_API_KEY and any STT/LLM credentials
+Create a local environment and install the Python dependencies:
+
+```powershell
+python -m venv venv
+venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
 ```
 
-`sounddevice` (used by the Rime playback layer) needs PortAudio available on the system:
-- macOS: `brew install portaudio`
-- Linux: `sudo apt update`
-         `sudo apt install libportaudio2`
-     
+Copy `.env.example` to `.env` and set the real Rime key in `.env`:
 
-If no audio device is available, audio playback falls back to a silent no-op sink and logs a warning — cancellation logic still works, you just won't hear anything.
-
-### Required environment variables
-
-| Var | Purpose |
-|---|---|
-| `RIME_API_KEY` | required — never hardcode this |
-| `RIME_MODEL_ID`, `RIME_SPEAKER`, `RIME_LANGUAGE` | voice selection — chosen deliberately, not left default |
-| `RIME_SAMPLING_RATE`, `RIME_SPEED_ALPHA` | audio quality/pacing |
-| `MOCK_LOOKUP_DELAY_SECONDS` | artificial backend delay used to simulate a real lookup |
-| STT/LLM provider keys | see `.env.example` — locked per team's available credits |
-
----
-
-## Running it
-
-**Live end-to-end (requires LiveKit + mic):**
-```bash
-python -m src.agent
-```
-Say "change my address to X," then interrupt mid-sentence with a different address. Watch the console for epoch transitions and stale-drop logs.
-
-**Standalone component demo (no mic, no LiveKit — just the epoch-fencing mechanism):**
-```bash
-python demo.py
-```
-Simulates the orchestrator starting a lookup + speech under one batch id, cancelling it a second later, and starting a fresh batch — showing the first batch's results get dropped and the order store is only ever touched by the batch that actually finished.
-
-**Unit + component tests:**
-=======
-python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env   # then fill in your real RIME_API_KEY
-export $(cat .env | xargs)   # or use python-dotenv / your shell's preferred method
+```powershell
+Copy-Item .env.example .env
 ```
 
-`sounddevice` needs PortAudio available on the system (`brew install
-portaudio` on macOS, `apt-get install libportaudio2` on Linux). If no
-audio device is available, `RimeSpeaker` automatically falls back to a
-silent no-op sink and logs a warning — cancellation logic still works,
-you just won't hear anything.
+The environment file contains these settings:
 
-## Step 1: confirm the Rime connection works at all
-
-Before touching cancellation, just make sure you can hear it speak:
-
-```python
-from src import BatchRegistry, RimeSpeaker
-
-registry = BatchRegistry()
-speaker = RimeSpeaker(registry)
-result = speaker.speak("Hello from Rime.", batch_id="smoke-test")
-print(result)  # SpeakResult(status="completed", ...)
+```text
+RIME_API_KEY
+RIME_MODEL_ID
+RIME_SPEAKER
+RIME_LANGUAGE
+RIME_SAMPLING_RATE
+RIME_SPEED_ALPHA
+MOCK_LOOKUP_DELAY_SECONDS
 ```
 
-## Layout
+The real `.env` file is ignored by Git. Only `.env.example`, containing no
+secret, belongs in the repository.
 
-```
-src/
-  config.py          # env vars: RIME_API_KEY, model/voice, MOCK_LOOKUP_DELAY_SECONDS, ...
-  batch_registry.py  # shared "is this batch id cancelled?" registry
-  rime_speaker.py     # streams + plays TTS audio, killable mid-stream
-  order_store.py      # one in-memory fake order, adjustable delay, killable mid-lookup
-demo.py               # end-to-end scenario mirroring the phone-rep interrupt analogy
-tests/                # unit tests for both components, no real network/audio needed
-```
+## Python Demo
 
-## How cancellation works
+Run the deterministic interruption scenario:
 
-Every request into either component carries a `batch_id`. The
-orchestrator calls `registry.cancel(batch_id)` when that batch is no
-longer needed. Both components poll `registry.is_cancelled(batch_id)`
-frequently:
-
-- **RimeSpeaker** checks before writing *each* audio chunk to the output
-  stream. On cancel, it calls `sink.abort()` (which drops anything
-  already buffered for playback, not just stops new writes) and closes
-  the HTTP connection to Rime so no more audio is even pulled down.
-- **OrderStore** sleeps in small increments (default 50ms) instead of
-  one long `sleep(delay)`, checking for cancellation between increments.
-  A late/cancelled result is simply discarded — the in-memory order is
-  never touched.
-
-This is the same shape as the phone-rep analogy in the spec: stop
-talking immediately, and throw away the lookup that was in flight,
-rather than either talking over the interruption or silently applying a
-stale result.
-
-## Config knobs (env vars, see `.env.example`)
-
-| Var | Purpose |
-|---|---|
-| `RIME_API_KEY` | required, never hardcode this |
-| `RIME_MODEL_ID`, `RIME_SPEAKER`, `RIME_LANGUAGE` | voice selection — pick deliberately, judges check for this |
-| `RIME_SAMPLING_RATE`, `RIME_SPEED_ALPHA` | audio quality/pacing |
-| `MOCK_LOOKUP_DELAY_SECONDS` | artificial backend delay, the knob Person D sweeps |
-
-`OrderStore(registry, delay_seconds=...)` also accepts the delay
-directly per-instance, which is what the tests use to avoid depending on
-env vars.
-
-## Running the tests
-
->>>>>>> 49aedca6607b3d6f872bf14bb11786d3ce4ffaa0
-```bash
-pytest tests/ -v
-```
-
-<<<<<<< HEAD
-**Full repeatable acceptance test (the scored evidence):**
-```bash
-./scripts/run_acceptance_test.sh
-```
-Runs the scripted interrupt scenario, logs every epoch transition and stale-drop event to a structured `.jsonl` log, and outputs pass/fail plus measured latencies. This is the source of truth for `RIME_EVIDENCE.md` — figures are never typed in by hand.
-
----
-
-## Build order
-
-1. **End-to-end voice path first** (`agent.py` → STT → intent → mock tool call → Rime audio out), with **zero** interruption handling. Must work reliably 5/5 times before touching epoch logic.
-2. **Epoch fencing** — the core mechanism. Explicit state machine, not ad hoc flags. Fix-loop against manual interrupt testing until leak-free (0 stale audio, 0 stale writes) before moving on.
-3. **Observability** — structured logging of every epoch transition and stale-drop, feeding the acceptance test script.
-4. **Polish** (only if time remains) — a visual epoch/state indicator for the demo recording.
-
-Full detail in `docs/architecture.md`.
-
-## Explicitly out of scope
-
-- Telephony/SIP bridge — too much infra risk for the timeline
-- Vector DB / RAG — no retrieval need in this problem
-- Multi-agent framework — a single orchestrator loop is sufficient
-- Real database — the mock order is a single in-memory record; a DB would be pure overhead
-- Cloud deployment, CI/CD, auth — no real users or sensitive data involved; time is better spent on the epoch mechanism itself
-
-## Known risks
-
-- **Rime streaming transport:** built against Rime's HTTP PCM streaming endpoint (headerless 16-bit PCM). If a WebSocket-based integration is used instead later (e.g. via Pipecat's `RimeTTSService`), confirm its interruption/barge-in support is wired the same way — the mechanics differ from a plain HTTP stream.
-- **Poll-based cancellation latency:** cancellation checks happen on an interval (not instant), so worst-case cancel latency is bounded by that interval, not zero. Measured explicitly in the acceptance test rather than assumed.
-
-See `docs/known_limitations.md` for the full, honest list — including anything not tested.
-
-## License
-
-[Add license]
-=======
-13 tests cover: normal completion, cancel-before-start (should skip work
-entirely), and cancel-mid-flight (should stop immediately and leave no
-stale state) — for both the speaker and the order store. The Rime tests
-fake the HTTP layer so they run without a real API key or network
-access.
-
-## Running the demo
-
-```bash
-export RIME_API_KEY=...   # optional — the order-store half works without it
+```powershell
 python demo.py
 ```
 
-Simulates the orchestrator starting a lookup + speech under one batch
-id, cancelling it a second later, and starting a fresh batch — showing
-the first batch's results get dropped and the order store is only ever
-touched by the batch that actually finished.
+The expected state transition is:
 
-## Known risk to confirm on day one
+```text
+first: stale-dropped
+second: completed
+final address: 221B Baker Street, London
+```
 
-Rime's HTTP PCM streaming endpoint (what this is built on) is a plain
-`POST` that streams headerless 16-bit PCM back — killing the *client-side*
-consumption of that stream is what this code does. If a WebSocket-based
-integration is used instead later (e.g. via Pipecat's `RimeTTSService`),
-double check that its interruption/barge-in support is wired up the same
-way, since the mechanics differ from a plain HTTP stream.
->>>>>>> 49aedca6607b3d6f872bf14bb11786d3ce4ffaa0
+The order-store behavior can be demonstrated without a Rime key. With a
+valid key and an available audio device, the confirmation is spoken by Rime.
+Without an audio device, the speaker falls back to a silent sink while the
+cancellation logic remains testable.
+
+## Tests
+
+Run the Python test suite from the repository root:
+
+```powershell
+python -m pytest -q
+```
+
+The tests cover batch cancellation, delayed order updates, stale epoch
+results, timeout handling, Rime stream cancellation, and orchestration event
+hooks.
+
+## Web Interface
+
+The `interface/` directory contains a TypeScript/Vite control and
+visualization layer for the Epoch demo. It shows:
+
+- Microphone state and a browser waveform preview.
+- Current epoch and active batch.
+- Rime configuration status without exposing the API key.
+- Current order state.
+- An event logger showing lookup, interruption, stale-result drops, and speech
+  lifecycle events.
+
+The interface backend is a TypeScript demo adapter. It demonstrates the
+state-fencing flow independently from the Python orchestrator; it does not
+claim to be the measured Rime audio path.
+
+Install and verify the interface:
+
+```powershell
+Set-Location interface
+npm.cmd install
+npm.cmd test
+npm.cmd run build
+```
+
+Run it locally:
+
+```powershell
+npm.cmd run dev
+```
+
+Open the URL printed by the server. The API loads the ignored root `.env` and
+exposes only whether the Rime key is configured.
+
+## Acceptance Test
+
+The acceptance scenario is:
+
+1. Start an address update with a fixed backend delay.
+2. Interrupt before the lookup finishes.
+3. Submit a corrected address.
+4. Verify that the stale result is dropped.
+5. Verify that only the corrected address reaches the final order state.
+6. Verify that the current response is the only confirmation spoken.
+7. Verify that timeout produces an explicit failure response rather than a
+   guess or an old result.
+
+The repository tests provide deterministic coverage of this behavior. Real
+user-visible latency and stale-audio measurements must come from repeatable
+acceptance runs and must not be invented in documentation.
+
+## Evidence
+
+`RIME_EVIDENCE.md` must report the shipped path, acceptance procedure,
+measured results, and limitations from real runs. It should include:
+
+- Barge-in to silence latency.
+- Corrected-turn time to first audio.
+- Stale-result and stale-data leak counts.
+- Timeout and failure-path results.
+- Exact Rime configuration used during the run.
+
+The web interface event logger is useful for explaining the flow, but it is
+not a substitute for measured evidence.
+
+## Failure Behavior and Limitations
+
+- A cancelled batch is not allowed to mutate the order or continue playback.
+- A late tool result is reported as stale and discarded.
+- A tool timeout invalidates the old batch and produces an explicit failure
+  message.
+- The current interface does not provide LiveKit transport or speech-to-text.
+- The browser waveform visualizes local microphone input; it is not a LiveKit
+  audio stream.
+- The mock order store is in memory and is not a production database.
+- Cancellation is polling-based, so the measured cancellation interval must
+  be reported honestly.
+

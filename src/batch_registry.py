@@ -14,6 +14,7 @@ one shared boolean per batch, checked often.
 """
 import threading
 import itertools
+from collections.abc import Callable
 
 
 class BatchRegistry:
@@ -37,6 +38,22 @@ class BatchRegistry:
     def is_cancelled(self, batch_id: str) -> bool:
         with self._lock:
             return batch_id in self._cancelled
+
+    def run_if_active(
+        self,
+        batch_id: str,
+        operation: Callable[[], None],
+    ) -> bool:
+        """Run ``operation`` only while cancellation cannot interleave.
+
+        The registry lock is the linearization point shared with ``cancel``.
+        Callers must not invoke registry methods from ``operation``.
+        """
+        with self._lock:
+            if batch_id in self._cancelled:
+                return False
+            operation()
+            return True
 
     def clear(self, batch_id: str) -> None:
         """Remove a cancelled batch after all work has stopped."""

@@ -2,7 +2,11 @@ import threading
 
 from src.batch_registry import BatchRegistry
 from src.order_store import LookupResult
-from src.orchestrator import EpochOrchestrator
+from src.orchestrator import (
+    EpochOrchestrator,
+    OrchestratorResult,
+    UpdateHandle,
+)
 
 
 class ControlledStore:
@@ -62,6 +66,37 @@ class NeverEndingStore:
         while not self.registry.is_cancelled(batch_id):
             threading.Event().wait(0.01)
         return LookupResult(batch_id, "cancelled", None)
+
+
+class TimeoutEventGate:
+    def __init__(self):
+        self.events = []
+        self.timeout_emitted = threading.Event()
+        self.release_timeout = threading.Event()
+
+    def __call__(self, event):
+        self.events.append(event)
+        if event["event"] == "tool-timeout":
+            self.timeout_emitted.set()
+            assert self.release_timeout.wait(1)
+
+
+class ExpiredWaitGate:
+    """Return an expired wait only after the test owns the orchestrator lock."""
+
+    def __init__(self):
+        self.entered = threading.Event()
+        self.release_wait = threading.Event()
+        self.returning = threading.Event()
+
+    def wait(self, timeout=None):
+        self.entered.set()
+        assert self.release_wait.wait(1)
+        self.returning.set()
+        return False
+
+    def set(self):
+        return None
 
 
 def test_epochs_are_monotonic_and_interrupt_cancels_active_batch():
@@ -147,6 +182,84 @@ def test_timeout_speaks_explicit_failure_and_drops_late_tool_result():
     assert [text for text, _ in speaker.calls] == [
         "I couldn't confirm that address. Can you repeat it?"
     ]
+
+
+def test_old_timeout_watcher_cannot_cancel_a_newer_epoch():
+    """Catches an unscoped interrupt after timeout eligibility was checked."""
+    registry = BatchRegistry()
+    speaker = RecordingSpeaker(registry)
+    event_gate = TimeoutEventGate()
+    orchestrator = EpochOrchestrator(
+        registry,
+        ControlledStore(registry),
+        speaker,
+        tool_timeout_seconds=0.01,
+        event_sink=event_gate,
+    )
+    old_context = orchestrator.begin_turn()
+    old_handle = UpdateHandle(old_context)
+    watcher = threading.Thread(
+        target=orchestrator._watch_timeout,
+        args=(old_context, old_handle),
+    )
+    watcher.start()
+    assert event_gate.timeout_emitted.wait(1)
+
+    newer_context = orchestrator.begin_turn()
+    event_gate.release_timeout.set()
+    watcher.join(1)
+
+    assert not watcher.is_alive()
+    assert orchestrator.is_current(newer_context) is True
+    assert registry.is_cancelled(newer_context.batch_id) is False
+    assert speaker.calls == []
+    orchestrator.interrupt(reason="test-cleanup")
+
+
+def test_timeout_watcher_cannot_speak_after_result_was_completed():
+    """Catches timeout side effects after losing the handle-result race."""
+    registry = BatchRegistry()
+    speaker = RecordingSpeaker(registry)
+    events = []
+    orchestrator = EpochOrchestrator(
+        registry,
+        ControlledStore(registry),
+        speaker,
+        tool_timeout_seconds=1.0,
+        event_sink=events.append,
+    )
+    context = orchestrator.begin_turn()
+    handle = UpdateHandle(context)
+    wait_gate = ExpiredWaitGate()
+    handle._done = wait_gate
+    watcher = threading.Thread(
+        target=orchestrator._watch_timeout,
+        args=(context, handle),
+    )
+    watcher.start()
+    assert wait_gate.entered.wait(1)
+
+    orchestrator._lock.acquire()
+    try:
+        wait_gate.release_wait.set()
+        assert wait_gate.returning.wait(1)
+        completed = OrchestratorResult(
+            context,
+            "completed",
+            {"address": "Completed Address"},
+        )
+        assert handle._set_result(completed) is True
+    finally:
+        orchestrator._lock.release()
+
+    watcher.join(1)
+
+    assert not watcher.is_alive()
+    assert handle.result == completed
+    assert orchestrator.is_current(context) is True
+    assert speaker.calls == []
+    assert not any(event["event"] == "tool-timeout" for event in events)
+    orchestrator.interrupt(reason="test-cleanup")
 
 
 def test_event_sink_receives_epoch_events():

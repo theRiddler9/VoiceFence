@@ -267,6 +267,8 @@ async def entrypoint(ctx: Any) -> None:
         stt=deepgram.STT(
             model=config.DEEPGRAM_MODEL,
             language=config.DEEPGRAM_LANGUAGE,
+            numerals=True,
+            smart_format=True,
         ),
         tts=rime.TTS(
             model=config.RIME_MODEL_ID,

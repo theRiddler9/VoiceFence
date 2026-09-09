@@ -66,12 +66,17 @@ class OrderStore:
             time.sleep(step)
             elapsed += step
 
-        # Recheck before mutating shared order state.
-        if self._registry.is_cancelled(batch_id):
-            return LookupResult(batch_id, "cancelled", None)
+        result = None
 
-        with self._lock:
-            self._order["address"] = new_address
-            self._order["status"] = "updated"
-            result = dict(self._order)
+        def commit() -> None:
+            nonlocal result
+            # Lock order is always registry, then store: cancellation and the
+            # eligibility/write pair therefore share one linearization point.
+            with self._lock:
+                self._order["address"] = new_address
+                self._order["status"] = "updated"
+                result = dict(self._order)
+
+        if not self._registry.run_if_active(batch_id, commit):
+            return LookupResult(batch_id, "cancelled", None)
         return LookupResult(batch_id, "completed", result)

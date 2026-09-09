@@ -5,6 +5,7 @@ from collections import OrderedDict
 import re
 import threading
 import time
+import unicodedata
 from typing import Any, Callable, Optional
 
 
@@ -44,6 +45,11 @@ def _clean_payload(payload: str) -> str:
 
 def _plausible(payload: str) -> bool:
     return bool(re.search(r"\d", payload) and re.search(r"[A-Za-z]", payload))
+
+
+def _canonical_address_key(address: str) -> str:
+    normalized = unicodedata.normalize("NFKC", " ".join(address.split()))
+    return normalized.casefold()
 
 
 def extract_address(event: TranscriptEvent) -> AddressIntent | None:
@@ -88,8 +94,8 @@ class VoicePipeline:
         self._barge_in_emitted = False
         self._last_address_by_turn: OrderedDict[str, str] = OrderedDict()
         self._anonymous_turn = 0
-        self._anonymous_last_address: Optional[str] = None
-        self._anonymous_interim_address: Optional[str] = None
+        self._anonymous_last_address_key: Optional[str] = None
+        self._anonymous_interim_address_key: Optional[str] = None
         self._lock = threading.Lock()
 
     def set_assistant_speaking(self, speaking: bool) -> None:
@@ -104,7 +110,7 @@ class VoicePipeline:
             self._user_speaking = True
             if is_new_segment:
                 self._anonymous_turn += 1
-                self._anonymous_last_address = None
+                self._anonymous_last_address_key = None
             if is_new_segment and self._assistant_speaking and not self._barge_in_emitted:
                 self._barge_in_emitted = True
                 should_barge_in = True
@@ -119,43 +125,82 @@ class VoicePipeline:
             self._barge_in_emitted = False
 
     def on_transcript(self, event: TranscriptEvent) -> None:
+        if not isinstance(event.text, str) or not event.text.strip():
+            self._emit(
+                "transcript-ignored",
+                event.timestamp,
+                reason="blank" if isinstance(event.text, str) else "invalid",
+                is_final=event.is_final,
+                turn_id=event.turn_id,
+            )
+            return
+
         intent = extract_address(event)
         if intent is None:
             if event.turn_id is None:
                 with self._lock:
-                    self._anonymous_interim_address = None
+                    self._anonymous_interim_address_key = None
             return
 
+        address_key = _canonical_address_key(intent.address)
+        turn_key = f"item:{event.turn_id}" if event.turn_id is not None else None
         with self._lock:
-            if event.turn_id is not None:
-                self._anonymous_interim_address = None
-                turn_key = f"item:{event.turn_id}"
-                if intent.address == self._last_address_by_turn.get(turn_key):
+            if turn_key is not None:
+                if address_key == self._last_address_by_turn.get(turn_key):
+                    self._anonymous_interim_address_key = None
                     self._last_address_by_turn.move_to_end(turn_key)
                     return
-                self._remember_turn_address(turn_key, intent.address)
             elif (
                 event.is_final
-                and intent.address == self._anonymous_interim_address
+                and address_key == self._anonymous_interim_address_key
             ):
                 # LiveKit can deliver this final after VAD has ended and the
                 # next anonymous speech segment has begun.
-                self._anonymous_interim_address = None
+                self._anonymous_interim_address_key = None
                 return
-            elif intent.address == self._anonymous_last_address:
-                if not event.is_final and intent.address == self._anonymous_interim_address:
+            elif address_key == self._anonymous_last_address_key:
+                if (
+                    not event.is_final
+                    and address_key == self._anonymous_interim_address_key
+                ):
                     return
                 if event.is_final:
-                    self._anonymous_interim_address = None
+                    self._anonymous_interim_address_key = None
                     return
-                self._anonymous_interim_address = intent.address
+
+        try:
+            self._on_address_intent(intent.address)
+        except Exception as exc:
+            try:
+                self._emit(
+                    "address-intent-error",
+                    event.timestamp,
+                    address=intent.address,
+                    transcript=intent.transcript,
+                    is_final=intent.is_final,
+                    turn_id=event.turn_id,
+                    error=str(exc),
+                )
+            except Exception:
+                # Diagnostics must not mask the callback failure being surfaced.
+                pass
+            raise
+
+        with self._lock:
+            if turn_key is not None:
+                self._anonymous_interim_address_key = None
+                self._remember_turn_address(turn_key, address_key)
+            elif (
+                address_key == self._anonymous_last_address_key
+                and not event.is_final
+            ):
+                self._anonymous_interim_address_key = address_key
             else:
-                self._anonymous_last_address = intent.address
-                self._anonymous_interim_address = (
-                    intent.address if not event.is_final else None
+                self._anonymous_last_address_key = address_key
+                self._anonymous_interim_address_key = (
+                    address_key if not event.is_final else None
                 )
 
-        self._on_address_intent(intent.address)
         self._emit("address-intent", event.timestamp, address=intent.address)
 
     def _remember_turn_address(self, turn_key: str, address: str) -> None:

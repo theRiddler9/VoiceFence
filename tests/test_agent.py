@@ -266,6 +266,25 @@ def test_transcript_adapter_preserves_partial_and_timestamp():
     ]
 
 
+def test_deepgram_numeric_transcript_satisfies_address_extraction_contract():
+    """Catches formatted street numerals being lost at the adapter boundary."""
+    from src.agent import handle_transcript_event
+
+    addresses = []
+    pipeline = VoicePipeline(lambda: None, addresses.append)
+    handle_transcript_event(
+        pipeline,
+        SimpleNamespace(
+            transcript="change my address to 1600 Pennsylvania Avenue",
+            is_final=True,
+            item_id="deepgram-numeric-turn",
+        ),
+        clock=lambda: 44.5,
+    )
+
+    assert addresses == ["1600 Pennsylvania Avenue"]
+
+
 def test_user_and_agent_state_mapping_keeps_overlap_observable():
     """Catches SDK state adapters that defer speech overlap until a transcript."""
     from src.agent import handle_agent_state, handle_user_state
@@ -496,7 +515,12 @@ def test_entrypoint_wires_current_livekit_events_without_muting_input(monkeypatc
     asyncio.run(agent_module.entrypoint(ctx))
 
     session = FakeAgentSession.last
-    assert session.options["stt"].options == {"model": "nova-3", "language": "en"}
+    assert session.options["stt"].options == {
+        "model": "nova-3",
+        "language": "en",
+        "numerals": True,
+        "smart_format": True,
+    }
     assert session.options["tts"].options == {
         "model": "mistv2",
         "speaker": "astra",

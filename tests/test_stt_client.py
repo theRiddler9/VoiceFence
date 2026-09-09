@@ -1,3 +1,5 @@
+import pytest
+
 from src.stt_client import TranscriptEvent, VoicePipeline, extract_address
 
 
@@ -203,3 +205,98 @@ def test_turn_dedup_cache_evicts_the_least_recent_turn_at_its_bound():
 
     assert addresses[-1] == "0 Example Street"
     assert len(addresses) == VoicePipeline.MAX_TURN_DEDUP_ENTRIES + 2
+
+
+def test_failed_interim_callback_allows_identical_final_to_retry():
+    """Catches dedup state being committed before the callback accepts intent."""
+    attempts = []
+    events = []
+
+    def accept_on_second_attempt(address):
+        attempts.append(address)
+        if len(attempts) == 1:
+            raise RuntimeError("orchestrator unavailable")
+
+    pipeline = VoicePipeline(
+        lambda: None,
+        accept_on_second_attempt,
+        events.append,
+    )
+
+    with pytest.raises(RuntimeError, match="orchestrator unavailable"):
+        pipeline.on_transcript(
+            TranscriptEvent(
+                "make it 221B Baker Street",
+                False,
+                60.0,
+                turn_id="retry-turn",
+            )
+        )
+
+    pipeline.on_transcript(
+        TranscriptEvent(
+            "make it 221B Baker Street",
+            True,
+            60.1,
+            turn_id="retry-turn",
+        )
+    )
+
+    assert attempts == ["221B Baker Street", "221B Baker Street"]
+    assert events[0] == {
+        "event": "address-intent-error",
+        "timestamp": 60.0,
+        "address": "221B Baker Street",
+        "transcript": "make it 221B Baker Street",
+        "is_final": False,
+        "turn_id": "retry-turn",
+        "error": "orchestrator unavailable",
+    }
+    assert events[-1]["event"] == "address-intent"
+
+
+def test_dedup_uses_canonical_address_key_but_preserves_callback_text():
+    """Catches case-only transcript revisions triggering duplicate updates."""
+    addresses = []
+    pipeline = VoicePipeline(lambda: None, addresses.append)
+
+    pipeline.on_transcript(
+        TranscriptEvent(
+            "make it 221B Baker Street",
+            False,
+            61.0,
+            turn_id="retry-turn",
+        )
+    )
+    pipeline.on_transcript(
+        TranscriptEvent(
+            "make it 221b baker street",
+            True,
+            61.1,
+            turn_id="retry-turn",
+        )
+    )
+
+    assert addresses == ["221B Baker Street"]
+
+
+def test_blank_transcript_emits_structured_ignored_diagnostic():
+    """Catches silently ignored blank provider transcripts."""
+    addresses = []
+    events = []
+    pipeline = VoicePipeline(lambda: None, addresses.append, events.append)
+
+    pipeline.on_transcript(
+        TranscriptEvent("  \t ", False, 62.0, turn_id="blank-turn")
+    )
+
+    assert addresses == []
+    assert events == [
+        {
+            "event": "transcript-ignored",
+            "timestamp": 62.0,
+            "reason": "blank",
+            "is_final": False,
+            "turn_id": "blank-turn",
+        }
+    ]

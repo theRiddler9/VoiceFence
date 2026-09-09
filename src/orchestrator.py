@@ -286,20 +286,26 @@ class EpochOrchestrator:
     def _watch_timeout(self, context: EpochContext, handle: UpdateHandle) -> None:
         if handle._done.wait(self._tool_timeout_seconds):
             return
-        if not self.is_current(context):
+
+        claimed_epoch = self._claim_timeout(context, handle)
+        if claimed_epoch is None:
             return
 
         self._emit("tool-timeout", context)
-        self.interrupt(reason="tool_timeout")
-        handle._set_result(
-            OrchestratorResult(
-                context,
-                "timeout",
-                error="address lookup timed out",
-            )
+        self._emit("epoch-invalidated", context, reason="tool_timeout")
+        self._emit(
+            "epoch-advanced",
+            EpochContext(claimed_epoch, context.batch_id),
+            reason="tool_timeout",
         )
 
-        failure_context = self.begin_turn()
+        failure_context = self._begin_timeout_failure(claimed_epoch)
+        if failure_context is None:
+            return
+        self._emit("epoch-started", failure_context)
+        if not self.is_current(failure_context):
+            return
+
         failure_task = self._speaker.speak(
             self.FAILURE_MESSAGE,
             failure_context.batch_id,
@@ -310,6 +316,68 @@ class EpochOrchestrator:
             if self._active_context == failure_context:
                 self._state.active_tts_task = failure_task
         self._emit("tts-started", failure_context, purpose="timeout-failure")
+
+    def _claim_timeout(
+        self,
+        context: EpochContext,
+        handle: UpdateHandle,
+    ) -> Optional[int]:
+        """Atomically claim a still-active context and invalidate only it."""
+        claimed_epoch: Optional[int] = None
+
+        def claim() -> None:
+            nonlocal claimed_epoch
+            with handle._result_lock:
+                if handle.result is not None:
+                    return
+
+                self._state.current_epoch += 1
+                claimed_epoch = self._state.current_epoch
+                self._epoch_reserved_for_next_turn = True
+                self._active_context = None
+                self._state.active_batch_id = None
+                self._state.active_tool_task = None
+                self._state.active_tts_task = None
+                handle.result = OrchestratorResult(
+                    context,
+                    "timeout",
+                    error="address lookup timed out",
+                )
+                handle._done.set()
+
+        with self._lock:
+            if (
+                self._active_context != context
+                or self._state.current_epoch != context.epoch
+            ):
+                return None
+            if not self._registry.run_if_active(context.batch_id, claim):
+                return None
+            if claimed_epoch is None:
+                return None
+            self._registry.cancel(context.batch_id)
+        return claimed_epoch
+
+    def _begin_timeout_failure(self, claimed_epoch: int) -> Optional[EpochContext]:
+        """Create timeout speech only if no newer turn consumed the epoch."""
+        with self._lock:
+            if (
+                self._active_context is not None
+                or self._state.current_epoch != claimed_epoch
+                or not self._epoch_reserved_for_next_turn
+            ):
+                return None
+
+            self._epoch_reserved_for_next_turn = False
+            failure_context = EpochContext(
+                epoch=claimed_epoch,
+                batch_id=self._registry.new_batch_id(),
+            )
+            self._active_context = failure_context
+            self._state.active_batch_id = failure_context.batch_id
+            self._state.active_tool_task = None
+            self._state.active_tts_task = None
+            return failure_context
 
     def _clear_tool_if_current(self, context: EpochContext) -> None:
         with self._lock:

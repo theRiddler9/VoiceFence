@@ -71,7 +71,7 @@ events include `barge-in-detected`.
 git clone <repo-url>
 Set-Location VoiceFence
 python -m venv .venv
-.\venv\Scripts\Activate.ps1
+.\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 Copy-Item .env.example .env
 ```
@@ -79,8 +79,8 @@ Copy-Item .env.example .env
 If PowerShell prevents activation, use the environment's interpreter directly:
 
 ```powershell
-.\venv\Scripts\python.exe -m pip install -r requirements.txt
-.\venv\Scripts\python.exe voice_demo.py
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe voice_demo.py
 ```
 
 ### macOS and Linux

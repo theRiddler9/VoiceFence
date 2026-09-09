@@ -18,7 +18,8 @@ from src.stt_client import TranscriptEvent, VoicePipeline
 
 _FIRST_ADDRESS = "42 Wallaby Way, Sydney"
 _CORRECTED_ADDRESS = "221B Baker Street, London"
-_WORKER_TIMEOUT_SECONDS = 2.0
+_ORCHESTRATOR_TOOL_TIMEOUT_SECONDS = 1.0
+_HARNESS_WAIT_TIMEOUT_SECONDS = 2.0
 
 
 class _CompletedRecordingTask:
@@ -73,7 +74,7 @@ class DeterministicOrderStore(OrderStore):
         }
 
     def wait_until_started(self, address: str) -> None:
-        if not self._started[address].wait(_WORKER_TIMEOUT_SECONDS):
+        if not self._started[address].wait(_HARNESS_WAIT_TIMEOUT_SECONDS):
             raise RuntimeError(f"store work for {address!r} did not start")
 
     def release(self, address: str) -> None:
@@ -87,7 +88,7 @@ class DeterministicOrderStore(OrderStore):
             raise RuntimeError(f"unexpected demo address: {new_address!r}") from exc
 
         started.set()
-        if not release.wait(_WORKER_TIMEOUT_SECONDS):
+        if not release.wait(_HARNESS_WAIT_TIMEOUT_SECONDS):
             raise RuntimeError(f"store work for {new_address!r} was not released")
         return super().update_address(new_address, batch_id)
 
@@ -105,10 +106,10 @@ def _serialize_result(result: OrchestratorResult) -> dict[str, Any]:
 
 
 def _wait_for_result(label: str, handle: Any) -> OrchestratorResult:
-    result = handle.join(_WORKER_TIMEOUT_SECONDS)
+    result = handle.join(_HARNESS_WAIT_TIMEOUT_SECONDS)
     if result is None:
         raise RuntimeError(f"{label} worker did not finish")
-    if not handle.wait_for_tts(_WORKER_TIMEOUT_SECONDS):
+    if not handle.wait_for_tts(_HARNESS_WAIT_TIMEOUT_SECONDS):
         raise RuntimeError(f"{label} confirmation worker did not finish")
     return result
 
@@ -123,7 +124,7 @@ def run_demo() -> dict[str, Any]:
         registry,
         store,
         speaker,
-        tool_timeout_seconds=_WORKER_TIMEOUT_SECONDS,
+        tool_timeout_seconds=_ORCHESTRATOR_TOOL_TIMEOUT_SECONDS,
     )
     events: list[dict[str, Any]] = []
     handles: list[Any] = []
@@ -137,22 +138,25 @@ def run_demo() -> dict[str, Any]:
         event_sink=events.append,
     )
 
-    # First transcript starts delayed store work.  The event confirms the
-    # worker is blocked before we create the speech overlap.
-    pipeline.on_transcript(TranscriptEvent(f"make it {_FIRST_ADDRESS}", True, 1.0))
-    store.wait_until_started(_FIRST_ADDRESS)
+    try:
+        # First transcript starts delayed store work.  The event confirms the
+        # worker is blocked before we create the speech overlap.
+        pipeline.on_transcript(
+            TranscriptEvent(f"make it {_FIRST_ADDRESS}", True, 1.0)
+        )
+        store.wait_until_started(_FIRST_ADDRESS)
 
-    pipeline.set_assistant_speaking(True)
-    pipeline.on_user_speech_started(timestamp=2.0)
-    pipeline.on_transcript(
-        TranscriptEvent(f"make it {_CORRECTED_ADDRESS}", True, 2.1)
-    )
-    store.wait_until_started(_CORRECTED_ADDRESS)
-
-    # Both releases are deterministic.  The first now observes its cancelled
-    # batch in the real OrderStore; the corrected request commits and speaks.
-    store.release(_FIRST_ADDRESS)
-    store.release(_CORRECTED_ADDRESS)
+        pipeline.set_assistant_speaking(True)
+        pipeline.on_user_speech_started(timestamp=2.0)
+        pipeline.on_transcript(
+            TranscriptEvent(f"make it {_CORRECTED_ADDRESS}", True, 2.1)
+        )
+        store.wait_until_started(_CORRECTED_ADDRESS)
+    finally:
+        # Never leave daemon workers behind when a pipeline or harness step
+        # fails. Releasing an unstarted address is harmless.
+        store.release(_FIRST_ADDRESS)
+        store.release(_CORRECTED_ADDRESS)
 
     if len(handles) != 2:
         raise RuntimeError(f"expected two address workers, received {len(handles)}")

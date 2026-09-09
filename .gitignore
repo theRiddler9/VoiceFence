@@ -10,3 +10,4 @@ __pycache__/
 interface/node_modules/
 interface/dist/
 tests/logs/
+.voicefence/

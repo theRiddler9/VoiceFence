@@ -13,7 +13,10 @@
           <span class="grid size-7 place-items-center rounded-lg bg-sky-300 text-[0.7rem] font-black tracking-tighter text-[#061321] shadow-[0_0_22px_rgba(125,211,252,0.25)]">VF</span>
           <span>VoiceFence</span>
         </a>
-        <span id="connection" class="text-xs text-sky-200">API connecting</span>
+        <div class="flex items-center gap-3 text-xs">
+          <span id="runtime-mode" class="rounded-full border border-sky-100/20 px-2.5 py-1 text-[#7891ab]">Demo mode</span>
+          <span id="connection" class="text-sky-200">API connecting</span>
+        </div>
       </header>
 
       <main class="mx-auto max-w-6xl">
@@ -35,15 +38,16 @@
             <span class="block text-xs text-[#829ab3]">Microphone</span>
             <strong id="microphone" class="my-2.5 block text-base text-[#e8f4ff]">Off</strong>
             <button id="microphone-toggle" class="rounded-lg border border-sky-300/40 px-3 py-2 text-xs font-bold text-sky-200 hover:bg-sky-300/10" type="button">Start microphone</button>
+            <small id="microphone-message" class="mt-2 block text-xs leading-snug text-[#829ab3]">Browser microphone is off.</small>
           </article>
           <article class="rounded-2xl border border-sky-100/15 bg-[#0d1d31]/90 p-5 shadow-2xl shadow-black/20">
             <span class="block text-xs text-[#829ab3]">LiveKit</span>
-            <strong id="livekit" class="my-2.5 block text-base text-[#e8f4ff]">Not connected</strong>
-            <small class="block text-xs leading-snug text-[#829ab3]">Voice room wiring pending.</small>
+            <strong id="livekit" class="my-2.5 block text-base text-[#e8f4ff]">Credentials ready</strong>
+            <small class="block text-xs leading-snug text-[#829ab3]">Worker credentials and room connection.</small>
           </article>
           <article class="rounded-2xl border border-sky-100/15 bg-[#0d1d31]/90 p-5 shadow-2xl shadow-black/20">
             <span class="block text-xs text-[#829ab3]">Rime</span>
-            <strong id="rime" class="my-2.5 block text-base text-[#e8f4ff]">Checking configuration</strong>
+            <strong id="rime" class="my-2.5 block text-base text-[#e8f4ff]">Configured</strong>
             <small class="block text-xs leading-snug text-[#829ab3]">Server-side key status.</small>
           </article>
         </section>
@@ -78,10 +82,7 @@
             <form id="address-form" class="mt-auto">
               <label class="sr-only" for="address">Your words</label>
               <div class="flex gap-2.5 max-sm:flex-col">
-                <div class="relative min-w-0 flex-1">
-                  <span id="address-hint" class="pointer-events-none absolute inset-y-0 left-3.5 flex items-center text-sm text-[#7891ab]">Type or speak your words</span>
-                  <input id="address" class="relative z-10 w-full rounded-lg border border-sky-100/20 bg-transparent px-3.5 py-3 text-[#f1f7ff] outline-none focus:border-sky-300 focus:ring-3 focus:ring-sky-300/10" name="address" autocomplete="street-address" required />
-                </div>
+                <input id="address" class="min-w-0 flex-1 rounded-lg border border-sky-100/20 bg-[#071522] px-3.5 py-3 text-[#f1f7ff] outline-none placeholder:text-[#7891ab] focus:border-sky-300 focus:ring-3 focus:ring-sky-300/10" name="address" autocomplete="street-address" placeholder="Type or speak your words" required />
                 <button class="rounded-lg bg-sky-300 px-4 py-3 font-extrabold text-[#061321] hover:bg-sky-200" type="submit">Send</button>
               </div>
             </form>

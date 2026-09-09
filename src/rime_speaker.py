@@ -108,7 +108,7 @@ class RimeSpeaker:
         chunk_size: int = 4096,
     ):
         self._registry = registry
-        self._api_key = api_key or config.RIME_API_KEY
+        self._api_key = config.RIME_API_KEY if api_key is None else api_key
         self._speaker = speaker
         self._model_id = model_id
         self._language = language

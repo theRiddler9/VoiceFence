@@ -9,12 +9,16 @@ export type InterfaceEvent = {
 };
 
 export type InterfaceState = {
+  source: "demo";
+  livekitConfigured: boolean;
+  livekitConnected: boolean;
   currentEpoch: number;
   activeBatchId: string | null;
   status: "idle" | "lookup-pending" | "speaking" | "interrupted" | "completed" | "stale-dropped";
   phase: "idle" | "lookup" | "speaking";
   rimeConfigured: boolean;
   order: { address: string; etaMinutes: number; status: string };
+  latestTranscript: string | null;
   events: InterfaceEvent[];
 };
 
@@ -45,12 +49,16 @@ export class InterfaceDemoSession {
 
   getState(): InterfaceState {
     return {
+      source: "demo",
+      livekitConfigured: Boolean(process.env.LIVEKIT_URL && process.env.LIVEKIT_API_KEY && process.env.LIVEKIT_API_SECRET),
+      livekitConnected: false,
       currentEpoch: this.epoch,
       activeBatchId: this.active?.batchId ?? null,
       status: this.status,
       phase: this.active?.phase ?? "idle",
       rimeConfigured: this.rimeConfigured,
       order: { ...this.order },
+      latestTranscript: null,
       events: this.events.slice(-60),
     };
   }

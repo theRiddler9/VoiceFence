@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
 import { InterfaceDemoSession } from "./epoch_demo";
+import { LiveEventStore } from "./live_event_store";
 
 const interfaceRoot = fileURLToPath(new URL("../", import.meta.url));
 dotenv.config({ path: fileURLToPath(new URL("../../.env", import.meta.url)), quiet: true });
@@ -10,6 +11,11 @@ dotenv.config({ path: fileURLToPath(new URL("../../.env", import.meta.url)), qui
 const port = Number(process.env.INTERFACE_PORT ?? 3000);
 const delayMs = Number(process.env.MOCK_LOOKUP_DELAY_SECONDS ?? 3) * 1000;
 const session = new InterfaceDemoSession(delayMs);
+const liveEvents = new LiveEventStore(
+  process.env.VOICEFENCE_EVENT_LOG ?? fileURLToPath(new URL("../../.voicefence/live_events.jsonl", import.meta.url)),
+  Boolean(process.env.RIME_API_KEY),
+  Boolean(process.env.LIVEKIT_URL && process.env.LIVEKIT_API_KEY && process.env.LIVEKIT_API_SECRET),
+);
 const vite = await createViteServer({
   root: interfaceRoot,
   appType: "spa",
@@ -45,7 +51,7 @@ const server = createServer(async (request, response) => {
 
   try {
     if (request.method === "GET" && path === "/api/state") {
-      sendJson(response, 200, session.getState());
+      sendJson(response, 200, liveEvents.getState() ?? session.getState());
       return;
     }
 

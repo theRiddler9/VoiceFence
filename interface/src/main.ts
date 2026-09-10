@@ -5,6 +5,7 @@ type EventRecord = {
   timestamp: number;
   epoch: number;
   batchId: string;
+  batch_id?: string;
   reason?: string;
   source?: string;
   purpose?: string;
@@ -55,9 +56,15 @@ const microphoneToggle = $("microphone-toggle") as HTMLButtonElement;
 const microphoneStatus = $("microphone");
 const microphoneMessage = $("microphone-message");
 const visualizer = $("voice-visualizer") as HTMLCanvasElement;
+const sseDot = $("sse-dot");
+const sseLabel = $("sse-label");
+const sessionStatus = $("session-status");
+const resetBtn = $("reset-btn") as HTMLButtonElement;
+
 let microphoneStream: MediaStream | null = null;
 let audioContext: AudioContext | null = null;
 let animationFrame = 0;
+let sseConnected = false;
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(path, {
@@ -75,6 +82,7 @@ function displayStatus(value: string): string {
 function getAudioState(state: InterfaceState): string {
   if (state.status === "interrupted") return "Interrupted";
   if (state.status === "completed") return "Completed";
+  if (state.status === "stale-dropped") return "Stale dropped";
   if (state.phase === "lookup") return "Processing";
   if (state.phase === "speaking") return "Speaking";
   return "Listening";
@@ -102,7 +110,16 @@ function getLatestAddressEvent(state: InterfaceState): EventRecord | undefined {
   return [...state.events].reverse().find((item) => item.event === "address-intent");
 }
 
-function addEventRow(item: EventRecord): HTMLLIElement {
+function normalizeEventRecord(item: EventRecord): EventRecord {
+  // The live store uses snake_case batch_id; the demo uses camelCase batchId.
+  return {
+    ...item,
+    batchId: item.batchId || item.batch_id || "",
+  };
+}
+
+function addEventRow(raw: EventRecord): HTMLLIElement {
+  const item = normalizeEventRecord(raw);
   const row = document.createElement("li");
   const time = document.createElement("time");
   const name = document.createElement("strong");
@@ -114,7 +131,9 @@ function addEventRow(item: EventRecord): HTMLLIElement {
   time.className = "text-[#7891ab]";
   name.className = "font-bold text-sky-200";
   detail.className = "text-[#7891ab]";
-  time.textContent = new Date(item.timestamp).toLocaleTimeString();
+
+  const ts = item.timestamp > 1e12 ? item.timestamp : item.timestamp * 1000;
+  time.textContent = new Date(ts).toLocaleTimeString();
   name.textContent = item.event;
   detail.textContent = `${item.batchId || "no batch"} · epoch ${item.epoch ?? "-"}${extras ? ` · ${extras}` : ""}${payload ? ` · ${payload}` : ""}`;
   row.append(time, name, detail);
@@ -131,7 +150,6 @@ function render(state: InterfaceState): void {
   runtimeMode.className = state.source === "live"
     ? "rounded-full border border-emerald-300/40 bg-emerald-300/10 px-2.5 py-1 text-emerald-200"
     : "rounded-full border border-sky-100/20 px-2.5 py-1 text-[#7891ab]";
-  connection.textContent = state.source === "live" ? "Live backend connected" : "Demo backend";
   epoch.textContent = String(state.currentEpoch);
   batch.textContent = state.activeBatchId ?? "No active batch";
   livekit.textContent = !state.livekitConfigured
@@ -152,7 +170,7 @@ function render(state: InterfaceState): void {
     ? `User interrupted · Epoch ${recentInterruption.epoch} cancelled`
     : "";
   orderAddress.textContent = state.order.address;
-  orderEta.textContent = `${state.order.etaMinutes} minutes`;
+  orderEta.textContent = state.order.etaMinutes > 0 ? `${state.order.etaMinutes} minutes` : "-";
   orderStatus.textContent = state.order.status;
   interruptButton.disabled = state.source === "live" || !state.activeBatchId;
   addressInput.disabled = state.source === "live";
@@ -160,10 +178,43 @@ function render(state: InterfaceState): void {
     ? state.latestTranscript || latestAddress?.address || latestAddress?.transcript || "Listening for an address request..."
     : addressInput.value || "Your words will appear here.";
 
+  sessionStatus.textContent = state.source === "live" ? "Live" : "Demo";
+
   events.replaceChildren(...state.events.slice(-10).reverse().map(addEventRow));
 }
 
+// --- SSE Connection ---
+
+function connectSSE(): void {
+  const eventSource = new EventSource("/api/events");
+
+  eventSource.onopen = () => {
+    sseConnected = true;
+    sseDot.className = "inline-block size-2 rounded-full bg-emerald-400 animate-pulse";
+    sseLabel.textContent = "Live";
+  };
+
+  eventSource.onmessage = (event) => {
+    try {
+      const state = JSON.parse(event.data) as InterfaceState;
+      render(state);
+    } catch {
+      // Ignore malformed events.
+    }
+  };
+
+  eventSource.onerror = () => {
+    sseConnected = false;
+    sseDot.className = "inline-block size-2 rounded-full bg-amber-400";
+    sseLabel.textContent = "Reconnecting…";
+    // EventSource auto-reconnects, but we update UI to show it.
+  };
+}
+
+// --- Polling Fallback ---
+
 async function refresh(): Promise<void> {
+  if (sseConnected) return; // SSE is handling updates.
   try {
     render(await request<InterfaceState>("/api/state"));
   } catch (error) {
@@ -173,22 +224,33 @@ async function refresh(): Promise<void> {
   }
 }
 
+// --- Event Handlers ---
+
 addressForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const address = addressInput.value.trim();
   if (!address) return;
   await request("/api/turn", { method: "POST", body: JSON.stringify({ address }) });
-  await refresh();
+  addressInput.value = "";
+  if (!sseConnected) await refresh();
 });
 
 interruptButton.addEventListener("click", async () => {
   await request("/api/interrupt", { method: "POST" });
-  await refresh();
+  if (!sseConnected) await refresh();
+});
+
+resetBtn.addEventListener("click", async () => {
+  await request("/api/reset", { method: "POST" });
+  addressInput.value = "";
+  if (!sseConnected) await refresh();
 });
 
 addressInput.addEventListener("input", () => {
   requestPreview.textContent = addressInput.value || "Your words will appear here.";
 });
+
+// --- Microphone Visualizer ---
 
 function drawVisualizer(analyser: AnalyserNode): void {
   const context = visualizer.getContext("2d");
@@ -251,5 +313,8 @@ async function toggleMicrophone(): Promise<void> {
 
 microphoneToggle.addEventListener("click", () => void toggleMicrophone());
 
+// --- Init ---
+
+connectSSE();
 void refresh();
-window.setInterval(() => void refresh(), 500);
+window.setInterval(() => void refresh(), 2000); // Slower fallback since SSE handles real-time.

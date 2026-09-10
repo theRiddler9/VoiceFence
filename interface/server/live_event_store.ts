@@ -1,4 +1,4 @@
-import { readFileSync, statSync } from "node:fs";
+import { appendFileSync, readFileSync, statSync, unwatchFile, watchFile, writeFileSync } from "node:fs";
 
 export type LiveInterfaceEvent = {
   event: string;
@@ -30,7 +30,13 @@ export type LiveInterfaceState = {
   events: LiveInterfaceEvent[];
 };
 
+type WatchCallback = (state: LiveInterfaceState) => void;
+
 export class LiveEventStore {
+  private watchers: Set<WatchCallback> = new Set();
+  private watching = false;
+  private lastSize = 0;
+
   constructor(
     private readonly path: string,
     private readonly rimeConfigured: boolean,
@@ -40,7 +46,74 @@ export class LiveEventStore {
   getState(): LiveInterfaceState | null {
     const events = this.readEvents();
     if (events.length === 0) return null;
+    return this.buildState(events);
+  }
 
+  clearEvents(): void {
+    try {
+      writeFileSync(this.path, "", "utf8");
+      this.lastSize = 0;
+    } catch {
+      // File may not exist yet; that's fine.
+    }
+  }
+
+  appendEvent(event: Partial<LiveInterfaceEvent>): void {
+    const record: LiveInterfaceEvent = {
+      timestamp: Date.now() / 1000,
+      ...event,
+    } as LiveInterfaceEvent;
+    const line = JSON.stringify(record) + "\n";
+    try {
+      appendFileSync(this.path, line, "utf8");
+    } catch {
+      // File may not exist yet; create it.
+      writeFileSync(this.path, line, "utf8");
+    }
+  }
+
+  watchEvents(callback: WatchCallback): () => void {
+    this.watchers.add(callback);
+    if (!this.watching) {
+      this.watching = true;
+      try {
+        this.lastSize = statSync(this.path).size;
+      } catch {
+        this.lastSize = 0;
+      }
+      watchFile(this.path, { interval: 100 }, () => this.onFileChange());
+    }
+    // Return unsubscribe function.
+    return () => {
+      this.watchers.delete(callback);
+      if (this.watchers.size === 0 && this.watching) {
+        this.watching = false;
+        unwatchFile(this.path);
+      }
+    };
+  }
+
+  private onFileChange(): void {
+    const state = this.getState();
+    if (!state) return;
+    let newSize: number;
+    try {
+      newSize = statSync(this.path).size;
+    } catch {
+      return;
+    }
+    if (newSize === this.lastSize) return;
+    this.lastSize = newSize;
+    for (const callback of this.watchers) {
+      try {
+        callback(state);
+      } catch {
+        // Don't let one bad callback break others.
+      }
+    }
+  }
+
+  private buildState(events: LiveInterfaceEvent[]): LiveInterfaceState {
     let currentEpoch = 0;
     let activeBatchId: string | null = null;
     let status: LiveInterfaceState["status"] = "idle";
@@ -86,6 +159,10 @@ export class LiveEventStore {
       } else if (event.event === "tts-started") {
         status = "speaking";
         phase = "speaking";
+      } else if (event.event === "tts-completed") {
+        status = "completed";
+        phase = "idle";
+        activeBatchId = null;
       }
     }
 

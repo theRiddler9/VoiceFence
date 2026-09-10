@@ -33,6 +33,11 @@ class RuntimeEventBridge:
     def path(self) -> Path:
         return self._path
 
+    def clear(self) -> None:
+        """Truncate the event log for a fresh session."""
+        with self._lock:
+            self._path.write_text("", encoding="utf-8")
+
     def __call__(self, event: dict[str, Any]) -> None:
         record = {
             "run_id": self._run_id,

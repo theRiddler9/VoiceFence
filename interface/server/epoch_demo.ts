@@ -45,6 +45,7 @@ export class InterfaceDemoSession {
   constructor(
     private readonly lookupDelayMs = 3000,
     private readonly rimeConfigured = Boolean(process.env.RIME_API_KEY),
+    public onStateChange?: (state: InterfaceState) => void,
   ) {}
 
   getState(): InterfaceState {
@@ -83,6 +84,7 @@ export class InterfaceDemoSession {
     this.active = operation;
     this.status = "lookup-pending";
     this.emit("epoch-started", operation);
+    this.emit("address-intent", operation, { address: trimmed } as any);
     this.emit("tool-started", operation, { purpose: "address-lookup" });
 
     setTimeout(() => this.finishLookup(operation), this.lookupDelayMs);
@@ -97,6 +99,7 @@ export class InterfaceDemoSession {
     this.status = "interrupted";
 
     if (previous) {
+      this.emit("barge-in-detected", previous, { reason });
       this.emit("barge-in", previous, { reason });
       this.emit("epoch-invalidated", previous, { reason });
     }
@@ -143,6 +146,7 @@ export class InterfaceDemoSession {
       this.status = "completed";
       this.active = null;
       this.emit("tts-completed", operation, { purpose: "interface-preview" });
+      if (this.onStateChange) this.onStateChange(this.getState());
     }, 350);
   }
 
@@ -165,5 +169,6 @@ export class InterfaceDemoSession {
       batchId: operation.batchId,
       ...fields,
     });
+    if (this.onStateChange) this.onStateChange(this.getState());
   }
 }

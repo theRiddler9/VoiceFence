@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#07111f" />
+    <meta name="description" content="VoiceFence — Epoch-based voice concurrency control for interruptible order updates. Say what needs changing; only the latest request wins." />
     <title>VoiceFence - Epoch control room</title>
   </head>
   <body class="min-w-80 bg-[#07111f] font-sans text-[#e8f0fa] antialiased">
@@ -14,6 +15,10 @@
           <span>VoiceFence</span>
         </a>
         <div class="flex items-center gap-3 text-xs">
+          <span id="sse-indicator" class="flex items-center gap-1.5 text-[#7891ab]">
+            <span id="sse-dot" class="inline-block size-2 rounded-full bg-gray-500"></span>
+            <span id="sse-label">Connecting…</span>
+          </span>
           <span id="runtime-mode" class="rounded-full border border-sky-100/20 px-2.5 py-1 text-[#7891ab]">Demo mode</span>
           <span id="connection" class="text-sky-200">API connecting</span>
         </div>
@@ -33,7 +38,7 @@
           </div>
         </section>
 
-        <section class="grid gap-3.5 sm:grid-cols-3" aria-label="Voice connection status">
+        <section class="grid gap-3.5 sm:grid-cols-4" aria-label="Voice connection status">
           <article class="rounded-2xl border border-sky-100/15 bg-[#0d1d31]/90 p-5 shadow-2xl shadow-black/20">
             <span class="block text-xs text-[#829ab3]">Microphone</span>
             <strong id="microphone" class="my-2.5 block text-base text-[#e8f4ff]">Off</strong>
@@ -49,6 +54,14 @@
             <span class="block text-xs text-[#829ab3]">Rime</span>
             <strong id="rime" class="my-2.5 block text-base text-[#e8f4ff]">Configured</strong>
             <small class="block text-xs leading-snug text-[#829ab3]">Server-side key status.</small>
+          </article>
+          <article class="rounded-2xl border border-sky-100/15 bg-[#0d1d31]/90 p-5 shadow-2xl shadow-black/20">
+            <span class="block text-xs text-[#829ab3]">Session</span>
+            <strong id="session-status" class="my-2.5 block text-base text-[#e8f4ff]">Demo</strong>
+            <div class="flex gap-2">
+              <button id="reset-btn" class="rounded-lg border border-sky-300/40 px-3 py-2 text-xs font-bold text-sky-200 hover:bg-sky-300/10" type="button">Reset</button>
+            </div>
+            <small class="mt-2 block text-xs leading-snug text-[#829ab3]">Reset clears events and order state.</small>
           </article>
         </section>
 
